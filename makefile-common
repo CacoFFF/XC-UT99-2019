@@ -1,0 +1,14 @@
+#Common directives for all of XC makefiles
+
+SONAME = $(PACKAGENAME).so
+
+PREPROCESSORS = -D__LINUX_X86__=1 -DUNICODE=1 -D_UNICODE=1 -D_REENTRANT=1 -DGPackage=$(PACKAGENAME) -DHAVE_PRAGMA_PACK=1
+
+CXXFLAGS = -fPIC -pipe -fsigned-char -fno-strict-aliasing -fmessage-length=0 -Wno-inline-new-delete -m32 -msse2 -Werror
+
+LDFLAGS = -shared -Wl,--no-as-needed -Wl,-rpath,. -rdynamic -Wl,--eh-frame-hdr -Wl,-z,defs -lm -lc -ldl -lnsl -lSDL2 -Wl,-z,defs -Wl,-soname,$(SONAME)
+
+OUTPUT = ../../System/$(SONAME)
+
+OBJDIR = Obj/
+
