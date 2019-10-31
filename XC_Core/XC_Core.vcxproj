@@ -173,6 +173,7 @@
     <ClInclude Include="Inc\XC_CoreObj.h" />
     <ClInclude Include="Inc\XC_Download.h" />
     <ClInclude Include="Inc\XC_LZMA.h" />
+    <ClInclude Include="Inc\XC_Template.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

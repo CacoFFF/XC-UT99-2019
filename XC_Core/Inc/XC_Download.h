@@ -5,22 +5,32 @@
 #ifndef _INC_XC_DL
 #define _INC_XC_DL
 
+#include "Cacus/CacusThread.h"
 
 class XC_CORE_API UXC_Download : public UDownload
 {
 	DECLARE_ABSTRACT_CLASS(UXC_Download,UDownload,CLASS_Transient|CLASS_Config,XC_Core);
-	NO_DEFAULT_CONSTRUCTOR(UXC_Download);
 
 	UBOOL EnableLZMA;
+
 	BYTE IsLZMA;
 	BYTE IsInvalid; //Remove from download list ASAP
-	BYTE IsUNative; //UPackage has native code, NOT IMPLEMENTED
-	BYTE IsDecompressing;
-	TCHAR FileHash[64]; //Last char always 0x00, NOT IMPLEMENTED
-	struct FThreadDecompressor* Decompressor;
+
+	int32 OldTransfered;
+	volatile int32 AsyncAction; //Worker thread in progress
+	volatile int32 Finished; //Destroy this channel on main thread
+	static volatile int32 GlobalLock; //Prevents destruction of download managers
+
+	static FString NetSizeError;
+	static FString NetOpenError;
+	static FString NetWriteError;
+	static FString NetMoveError;
+	static FString InvalidUrlError;
+	static FString ConnectionFailedError;
 
 	// Constructors.
 	void StaticConstructor();
+	UXC_Download();
 
 	// UObject interface.
 	void Destroy();
@@ -29,11 +39,6 @@ class XC_CORE_API UXC_Download : public UDownload
 	void Tick();
 	void DownloadDone();
 	void ReceiveData( BYTE* Data, INT Count );
-	
-	// UXC_Download
-	void StartDecompressor();
-	void DestFilename( TCHAR* T);
-
 };
 
 class XC_CORE_API UXC_ChannelDownload : public UXC_Download
@@ -89,6 +94,21 @@ class XC_CORE_API UXC_FileChannel : public UFileChannel
 	// UFileChannel interface.
 //	FString Describe();
 	void Tick();
+};
+
+
+class XC_CORE_API FDownloadAsyncProcessor : public CThread
+{
+public:
+	typedef void (*ASYNC_PROC)(FDownloadAsyncProcessor*);
+
+	UXC_Download* Download;
+	int32 DownloadTag;
+	ASYNC_PROC Proc;
+
+	FDownloadAsyncProcessor( const ASYNC_PROC InProc, UXC_Download* InDownload);
+
+	bool DownloadActive();
 };
 
 

@@ -4,22 +4,6 @@
 
 #include "Cacus/CacusString.h"
 
-//Specialized lightweight helpers
-template<class T> inline void ExchangeRaw( T& A, T& B )
-{
-	register INT Tmp;
-	for ( INT i=0 ; i<sizeof(T)/sizeof(Tmp) ; i++ )
-	{
-		Tmp = ((INT*)&A)[i];
-		((INT*)&A)[i] = ((INT*)&B)[i];
-		((INT*)&B)[i] = Tmp;
-	}
-}
-
-template < INT cmpsize > inline INT appStrncmp( const TCHAR* S1, const TCHAR(&S2)[cmpsize])
-{
-	return appStrncmp( S1, S2, cmpsize-1);
-}
 
 //========= FStringBetween - begin ==========//
 //
@@ -356,6 +340,9 @@ void FURI::setPort( const TCHAR* Val)
 		Port = 0;
 	else
 		Port = NewVal;
+
+	if ( !Port )
+		Port = DefaultPort( Scheme);
 }
 
 
@@ -457,7 +444,7 @@ void FURI::Parse( const FString& Address)
 	// 'This' will temporarily become the 'Reference URI'
 	// Until it's time to become the 'Transform URI' (result of parsing)
 	// The Base URI will be deleted at end of function, so we can safely move elements to Reference using 'ExchangeRaw'
-	debugf( NAME_Log, TEXT("== Parsing URI: %s"), *Address);
+//	debugf( NAME_Log, TEXT("== Parsing URI: %s"), *Address);
 	FURI Base;
 	ExchangeRaw( *this, Base);
 

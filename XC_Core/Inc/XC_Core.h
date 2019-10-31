@@ -45,6 +45,7 @@ you need and add the proper macros and definitions in your own private header
 
 #include "Core.h"
 #include "Cacus/CacusPlatform.h"
+#include "XC_Template.h"
 #include "XC_CoreClasses.h"
 
 // Private functions

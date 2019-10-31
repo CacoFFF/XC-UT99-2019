@@ -92,5 +92,8 @@
     <ClInclude Include="Inc\FURI.h">
       <Filter>Inc</Filter>
     </ClInclude>
+    <ClInclude Include="Inc\XC_Template.h">
+      <Filter>Inc</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

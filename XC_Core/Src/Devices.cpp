@@ -187,3 +187,39 @@ void FOutputDeviceInterceptor::SerializeNext( const TCHAR* Text, EName Event)
 	CSpinLock Lock(&SerializeLock);
 	Next->Serialize( Text, Event);
 }
+
+//*************************************************
+// Thread-safe log accumulator
+//*************************************************
+
+FOutputDeviceAsyncStorage::FOutputDeviceAsyncStorage()
+	: Lock(0)
+{
+}
+
+FOutputDeviceAsyncStorage::~FOutputDeviceAsyncStorage()
+{
+	Flush();
+}
+
+void FOutputDeviceAsyncStorage::Serialize( const TCHAR* Msg, EName Event)
+{
+	CSpinLock SL(&Lock);
+	Store.AddZeroed(); //Strange crash if I use AddItem
+	Store.Last().Event = Event;
+	Store.Last().Msg = Msg;
+}
+
+void FOutputDeviceAsyncStorage::Flush()
+{
+	CSpinLock SL(&Lock);
+	for ( int32 i=0 ; i<Store.Num() ; i++ )
+		GLog->Serialize( *Store(i).Msg, Store(i).Event);
+	Store.Empty();
+}
+
+void FOutputDeviceAsyncStorage::Discard()
+{
+	CSpinLock SL(&Lock);
+	Store.Empty();
+}

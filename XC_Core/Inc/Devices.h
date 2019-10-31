@@ -48,4 +48,24 @@ public:
 	void FlushRepeater();
 	void SerializeNext( const TCHAR* Text, EName Event );
 };
+
+class XC_CORE_API FOutputDeviceAsyncStorage : public FOutputDevice
+{
+public:
+	volatile int32 Lock;
+	TArray<FLogLine> Store;
+
+	//Constructor
+	FOutputDeviceAsyncStorage();
+	~FOutputDeviceAsyncStorage();
+
+	//FOutputDevice interface
+	void Serialize( const TCHAR* Msg, EName Event );
+
+	//FOutputDeviceAsyncStorage
+	void Flush();
+	void Discard();
+};
+
+
 #endif
