@@ -182,6 +182,9 @@ int StaticInitScriptCompiler()
 	if ( Initialized++ )
 		return 0; //Prevent multiple recursion
 
+	if ( Initialized != 1337 ) //Disable for now
+		return 0;
+
 	uint8* Tmp;
 
 	Tmp = EditorBase + 0x8F880; //Get FScriptCompiler::CompileExpr

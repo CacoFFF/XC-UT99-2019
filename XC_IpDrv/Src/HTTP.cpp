@@ -233,6 +233,7 @@ void UXC_HTTPDownload::Tick()
 						Download->DownloadError( *UXC_Download::ConnectionFailedError );
 						return;
 					}
+					Download->SavedLogs.Log( NAME_DevNetTraffic, TEXT("Connected..."));
 				}
 
 				double LastRecvTime = appSecondsNew();
@@ -353,11 +354,13 @@ bool UXC_HTTPDownload::AsyncReceive()
 		if ( Bytes == 0 )
 		{
 			bShutdown = true;
+			SavedLogs.Logf( NAME_DevNetTraffic, TEXT("Graceful shutdown"));
 			break;
 		}
 		TotalBytes += Bytes;
 		int32 Start = Response.ReceivedData.Add(Bytes);
 		appMemcpy( &Response.ReceivedData(Start), Buf, Bytes);
+		SavedLogs.Logf( NAME_DevNetTraffic, TEXT("Received %i bytes"), Bytes);
 	}
 
 	if ( (Socket.LastError != 0) && (Socket.LastError != FSocket::ENonBlocking) )
@@ -375,6 +378,7 @@ bool UXC_HTTPDownload::AsyncReceive()
 				Response.HeaderLines.AddZeroed();
 				if ( i == 0 ) //Empty line: EOH
 				{
+					SavedLogs.Logf( NAME_DevNetTraffic, TEXT("HTTP Header END received") );
 					Response.ReceivedData.Remove( 0, 2);
 					break;
 				}
@@ -383,6 +387,7 @@ bool UXC_HTTPDownload::AsyncReceive()
 				for ( int32 j=0 ; j<i ; j++ )
 					NewLine(j) = (TCHAR)Response.ReceivedData(j);
 				NewLine(i) = '\0';
+				SavedLogs.Logf( NAME_DevNetTraffic, TEXT("HTTP Header received: %s"), *Response.HeaderLines.Last() );
 
 				//Remove raw line and keep processing
 				Response.ReceivedData.Remove( 0, i+2);
@@ -416,12 +421,24 @@ bool UXC_HTTPDownload::AsyncReceive()
 		else
 			return bShutdown;
 
+		AGAIN:
 		if ( Response.Status == 200 ) //OK
 		{
+			//Cookie, only one supported for now
+			FString* SetCookie = Response.Headers.Find( TEXT("Set-Cookie"));
+			if ( SetCookie )
+				Request.Headers.Set( TEXT("Cookie"), **SetCookie);
 			//Get filesize
 			FString* ContentLength = Response.Headers.Find( TEXT("Content-Length"));
 			if ( ContentLength )
+			{
 				RealFileSize = appAtoi( **ContentLength);
+				if ( RealFileSize == 0 )
+				{
+					Response.Status = 404;
+					goto AGAIN;
+				}
+			}
 		}
 		else if ( Response.Status == 301 || Response.Status == 302 || Response.Status == 303 ||  Response.Status == 307 ) //Permanent redirect + Found + Temporary redirect
 		{

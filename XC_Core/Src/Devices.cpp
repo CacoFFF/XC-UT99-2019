@@ -204,10 +204,12 @@ FOutputDeviceAsyncStorage::~FOutputDeviceAsyncStorage()
 
 void FOutputDeviceAsyncStorage::Serialize( const TCHAR* Msg, EName Event)
 {
+	FLogLine Line( Event, Msg);
 	CSpinLock SL(&Lock);
-	Store.AddZeroed(); //Strange crash if I use AddItem
+	Store.AddItem( RValueMove(Line) );
+/*	Store.AddZeroed();
 	Store.Last().Event = Event;
-	Store.Last().Msg = Msg;
+	Store.Last().Msg = Msg;*/
 }
 
 void FOutputDeviceAsyncStorage::Flush()

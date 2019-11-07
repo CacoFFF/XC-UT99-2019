@@ -12,6 +12,7 @@
 //Specialized lightweight helpers
 template<class T> inline void ExchangeRaw( T& A, T& B )
 {
+	static_assert( sizeof(T) % sizeof(INT) == 0, "ExchangeRaw error: type size not multiple of 4");
 	register INT Tmp;
 	for ( INT i=0 ; i<sizeof(T)/sizeof(Tmp) ; i++ )
 	{
