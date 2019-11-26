@@ -86,6 +86,15 @@ FClassPropertyCache* FClassPropertyCache::GetCache( UClass* Other)
 	return NULL;
 }
 
+UProperty* FClassPropertyCache::GetNamedProperty( const TCHAR* PropertyName)
+{
+	for ( FClassPropertyCache* ClassCache=this ; ClassCache ; ClassCache=ClassCache->Parent )
+		for ( FPropertyCache* PropCache=ClassCache->Properties ; PropCache ; PropCache=PropCache->Next )
+			if ( !appStricmp( PropCache->Property->GetName(), PropertyName) )
+				return PropCache->Property;
+	return nullptr;
+}
+
 void FClassPropertyCache::GrabProperties( FMemStack& Mem)
 {
 	UProperty* Prop = Class->PropertyLink;
@@ -97,11 +106,5 @@ void FClassPropertyCache::GrabProperties( FMemStack& Mem)
 		Prop = Prop->PropertyLinkNext;
 	}
 	bProps = 1;
-	if ( Next && !Parent && Class->GetSuperClass() ) //Not last, but needs parent
-	{
-		Next = CreateParent( Mem);
-		Parent = Next;
-		Parent->GrabProperties( Mem);
-	}
 }
 

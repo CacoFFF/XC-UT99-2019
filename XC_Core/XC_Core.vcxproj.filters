@@ -40,6 +40,9 @@
     <ClCompile Include="Src\URI.cpp">
       <Filter>Src</Filter>
     </ClCompile>
+    <ClCompile Include="Src\GameSaver.cpp">
+      <Filter>Src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Src">
@@ -93,6 +96,12 @@
       <Filter>Inc</Filter>
     </ClInclude>
     <ClInclude Include="Inc\XC_Template.h">
+      <Filter>Inc</Filter>
+    </ClInclude>
+    <ClInclude Include="Inc\UnScrCom.h">
+      <Filter>Inc</Filter>
+    </ClInclude>
+    <ClInclude Include="Inc\XC_GameSaver.h">
       <Filter>Inc</Filter>
     </ClInclude>
   </ItemGroup>

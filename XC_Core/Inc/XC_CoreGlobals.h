@@ -8,7 +8,6 @@
 struct FPackageFileSummary;
 
 
-
 XC_CORE_API void XCCNatives( UBOOL bEnable); //Enables the commented out opcodes in XC_CoreStatics, careful when using this online
 
 XC_CORE_API UBOOL FixNameCase( const TCHAR* NameToFix); //Only if name is found

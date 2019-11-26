@@ -206,10 +206,9 @@ void FOutputDeviceAsyncStorage::Serialize( const TCHAR* Msg, EName Event)
 {
 	FLogLine Line( Event, Msg);
 	CSpinLock SL(&Lock);
-	Store.AddItem( RValueMove(Line) );
-/*	Store.AddZeroed();
-	Store.Last().Event = Event;
-	Store.Last().Msg = Msg;*/
+//	Store.AddItem( RValueMove(Line) );
+	Store.AddZeroed();
+	ExchangeRaw( Store.Last(), Line);
 }
 
 void FOutputDeviceAsyncStorage::Flush()

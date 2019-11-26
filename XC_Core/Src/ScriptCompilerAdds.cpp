@@ -10,6 +10,9 @@
 #include "XC_CoreGlobals.h"
 #include "Engine.h"
 
+//Deus-Ex script compiler
+#include "UnScrCom.h"
+
 #define PSAPI_VERSION 1
 #include <Psapi.h>
 
@@ -69,45 +72,30 @@ static CompileScripts_Func CompileScripts;
 static UBOOL CompileScripts_Proxy( TArray<UClass*>& ClassList, FScriptCompiler_XC* Compiler, UClass* Class );
 
 
-class FPropertyBase_XC
+class FPropertyBase_XC : public FPropertyBase
 {
 public:
 	typedef FPropertyBase_XC* (FPropertyBase_XC::*Constructor_UProp)(UProperty* PropertyObj);
 	static Constructor_UProp FPropertyBase_UProp;
 public:
-	// Variables.
-	int unk_00;
-	int ArrayDim; //Set to 0 on Dyn Arrays!
-	uint32 PropertyFlags;
-	union
-	{
-		UField* Field;
-		uint32 BitMask;
-	};
-	UClass* MetaClass;
 
 	FPropertyBase_XC* ConstructorProxy_UProp( UProperty* PropertyObj);
 };
 FPropertyBase_XC::Constructor_UProp FPropertyBase_XC::FPropertyBase_UProp = nullptr;
 
 
-class FToken : public FPropertyBase_XC //Large class!
+class FScriptCompiler_XC : public FScriptCompiler
 {
 public:
-};
 
-
-class FScriptCompiler_XC
-{
-public:
 	typedef int (FScriptCompiler_XC::*CompileExpr_Func)( FPropertyBase_XC, const TCHAR*, FToken*, int, FPropertyBase_XC*);
 	static CompileExpr_Func CompileExpr_Org;
 
 	UField* FindField( UStruct* Owner, const TCHAR* InIdentifier, UClass* FieldClass, const TCHAR* P4);
 	int CompileExpr_FunctionParam( FPropertyBase_XC Type, const TCHAR* Error, FToken* Token, int unk_p4, FPropertyBase_XC* unk_p5);
+
 };
 FScriptCompiler_XC::CompileExpr_Func FScriptCompiler_XC::CompileExpr_Org = nullptr;
-
 
 //TODO: Disassemble Editor.so for more symbols
 // Hook helper
@@ -187,26 +175,24 @@ int StaticInitScriptCompiler()
 
 	uint8* Tmp;
 
-	Tmp = EditorBase + 0x8F880; //Get FScriptCompiler::CompileExpr
+	Tmp = EditorBase + 0x90A80; //Get FScriptCompiler::CompileExpr
 	ForceAssign( Tmp, FScriptCompiler_XC::CompileExpr_Org);
 
-	Tmp = EditorBase + 0x86A90; //Get FPropertyBase::FPropertyBase( UProperty*) --- real ---
+	Tmp = EditorBase + 0x87EF0; //Get FPropertyBase::FPropertyBase( UProperty*) --- real ---
 	ForceAssign( Tmp, FPropertyBase_XC::FPropertyBase_UProp);
 
 	ForceAssign( CompileScripts_Proxy, Tmp); //Proxy CompileScripts initial call
-	EncodeCall( EditorBase + 0x9AA1F, Tmp);
-	CompileScripts = (CompileScripts_Func)(EditorBase + 0x93E40); //Get CompileScripts global/static
+	EncodeCall( EditorBase + 0x9B53D, Tmp);
+	CompileScripts = (CompileScripts_Func)(EditorBase + 0x94AA0); //Get CompileScripts global/static
 
 	ForceAssign( FScriptCompiler_XC::FindField, Tmp); //Trampoline FScriptCompiler::FindField into our version
-	EncodeJump( EditorBase + 0x96630, Tmp);
+	EncodeJump( EditorBase + 0x97140, Tmp);
 
 	ForceAssign( FScriptCompiler_XC::CompileExpr_FunctionParam, Tmp); //Proxy FScriptCompiler::CompileExpr for function params
-	EncodeCall( EditorBase + 0x92A9A, Tmp); //above "type mismatch in parameter"
+	EncodeCall( EditorBase + 0x9378A, Tmp); //above "type mismatch in parameter"
 
 	ForceAssign( FPropertyBase_XC::ConstructorProxy_UProp, Tmp); //Middleman FPropertyBase::FPropertyBase( UProperty*) using it's jumper
-	EncodeJump( EditorBase + 0x2095, Tmp);
-
-//	WriteByte( EditorBase + 0x9A3D4, 0x01); //Kill off "Node->iNative >= EX_FirstNative" assertion
+	EncodeJump( EditorBase + 0x20B3, Tmp);
 }
 
 
@@ -359,3 +345,116 @@ int FScriptCompiler_XC::CompileExpr_FunctionParam( FPropertyBase_XC Type, const 
 	unguard
 }
 
+
+#ifdef _WINDOWS
+/*
+//
+// Add missing definitions not exported in DLL
+//
+
+UBOOL FScriptCompiler::GetIdentifier( FToken& Token, INT NoConsts)
+{
+	if( GetToken( Token, NULL, NoConsts ) )
+	{
+		if( Token.TokenType == TOKEN_Identifier )
+			return 1;
+		UngetToken(Token);
+	}
+	return 0;
+}
+
+UBOOL FScriptCompiler::MatchIdentifier( FName Match)
+{
+	FToken Token;
+	if( GetToken(Token) )
+	{
+		if( (Token.TokenType==TOKEN_Identifier) && Token.TokenName==Match )
+			return 1;
+		UngetToken(Token);
+	}
+	return 0;
+}
+
+UBOOL FScriptCompiler::MatchSymbol( const TCHAR* Match)
+{
+	FToken Token;
+	if( GetToken(Token,NULL,1) )
+	{
+		if( Token.TokenType==TOKEN_Symbol && !appStricmp(Token.Identifier,Match) )
+			return 1;
+		UngetToken(Token);
+	}
+	return 0;
+}
+
+void FScriptCompiler::UngetToken( FToken& Token)
+{
+	InputPos = Token.StartPos;
+	InputLine = Token.StartLine;
+}
+
+void FScriptCompiler::RequireSymbol( const TCHAR* Match, const TCHAR* Tag)
+{
+	if( !MatchSymbol(Match) )
+		appThrowf( TEXT("Missing '%s' in %s"), Match, Tag );
+}
+
+void FScriptCompiler::CheckAllow( const TCHAR* Thing, DWORD AllowFlags)
+{
+	if( (TopNest->Allow & AllowFlags) != AllowFlags )
+	{
+		if( TopNest->NestType==NEST_None )
+			appThrowf( TEXT("%s is not allowed before the Class definition"), Thing );
+		else
+			appThrowf( TEXT("%s is not allowed here"), Thing );
+	}
+	if( AllowFlags & ALLOW_Cmd )
+		TopNest->Allow &= ~(ALLOW_VarDecl | ALLOW_Function | ALLOW_Ignores);
+}
+
+UBOOL FScriptCompiler::GetConstInt( INT& Result, const TCHAR* Tag, UStruct* Scope)
+{
+	FToken Token;
+	if ( GetToken(Token) ) 
+	{
+		if( Token.GetConstInt(Result) )
+			return 1;
+		else if ( Scope )
+		{
+			//Not used here
+		}
+		else
+			UngetToken(Token);
+
+		UngetToken(Token);
+	}
+	if ( Tag )
+		appThrowf( TEXT("%s: Missing constant integer") );
+	return 0;
+}
+
+UClass* FScriptCompiler::GetQualifiedClass( const TCHAR* Thing)
+{
+	UClass* Result = nullptr;
+	TCHAR Buf[256]=TEXT("");
+	while ( true )
+	{
+		FToken Token;
+		if( !GetIdentifier(Token) )
+			break;
+		appStrncat( Buf, Token.Identifier, ARRAY_COUNT(Buf) );
+		if( !MatchSymbol(TEXT(".")) )
+			break;
+		appStrncat( Buf, TEXT("."), ARRAY_COUNT(Buf) );
+	}
+	if( Buf[0] != '\0' )
+	{
+		Result = FindObject<UClass>( ANY_PACKAGE, Buf );
+		if( !Result )
+			appThrowf( TEXT("Class '%s' not found"), Buf);
+	}
+	else if( Thing )
+		appThrowf( TEXT("%s: Missing class name"), Thing);
+	return Result;
+}*/
+#endif

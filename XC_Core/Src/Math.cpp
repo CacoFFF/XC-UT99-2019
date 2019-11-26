@@ -6,6 +6,13 @@
 
 static CFVector4 WMinusOne( 0, 0, 0, -1.f);
 
+
+static const CFVector4 BoundsReduction( 0.4f, 0.4f, -0.4f, -0.4f);
+CFVector4 TestSQ( const CFVector4& A, const CFVector4& B)
+{
+	return (A * B + BoundsReduction).Reciprocal_Approx() + BoundsReduction + A;
+}
+
 // Does PlaneDot on both Start and End on the same plane (Unaligned plane)
 // Dist must be a FLOAT[2] array
 void DoublePlaneDot( const FPlane& Plane, const CFVector4& Start, const CFVector4& End, FLOAT* Dist2)

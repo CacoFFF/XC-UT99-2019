@@ -141,11 +141,13 @@
       <AdditionalDependencies>..\Core\Lib\Core.lib;..\Engine\Lib\Engine.lib;..\CacusLib\Release\Cacus.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <ImageHasSafeExceptionHandlers>true</ImageHasSafeExceptionHandlers>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
+      <LargeAddressAware>true</LargeAddressAware>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Src\Devices.cpp" />
     <ClCompile Include="Src\EditorAdds.cpp" />
+    <ClCompile Include="Src\GameSaver.cpp" />
     <ClCompile Include="Src\PathBuilder.cpp" />
     <ClCompile Include="Src\RouteMapper.cpp" />
     <ClCompile Include="Src\ScriptCompilerAdds.cpp" />
@@ -164,6 +166,7 @@
     <ClInclude Include="Inc\Devices.h" />
     <ClInclude Include="Inc\FPathBuilderMaster.h" />
     <ClInclude Include="Inc\FURI.h" />
+    <ClInclude Include="Inc\UnScrCom.h" />
     <ClInclude Include="Inc\UnXC_Math.h" />
     <ClInclude Include="Inc\UnXC_Script.h" />
     <ClInclude Include="Inc\XC_Commandlets.h" />
@@ -172,6 +175,7 @@
     <ClInclude Include="Inc\XC_CoreGlobals.h" />
     <ClInclude Include="Inc\XC_CoreObj.h" />
     <ClInclude Include="Inc\XC_Download.h" />
+    <ClInclude Include="Inc\XC_GameSaver.h" />
     <ClInclude Include="Inc\XC_LZMA.h" />
     <ClInclude Include="Inc\XC_Template.h" />
   </ItemGroup>

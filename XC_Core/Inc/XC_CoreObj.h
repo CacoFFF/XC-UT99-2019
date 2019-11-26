@@ -77,33 +77,90 @@ struct XC_CORE_API FPropertyCache
 
 //Base type of Class cache, subdefine for different property caching types
 //The first object to be added should be the highest intended class
+template <class T> struct TClassPropertyCacheHolder;
 struct XC_CORE_API FClassPropertyCache
 {
+	typedef struct TClassPropertyCacheHolder<FClassPropertyCache> Holder;
+
 	FClassPropertyCache* Parent;
 	FClassPropertyCache* Next;
 	UClass* Class;
 	UBOOL bProps;
 	FPropertyCache* Properties;
 
+	//Master constructor, create the top class cache here
 	FClassPropertyCache( UClass* MasterClass=UObject::StaticClass() );
+
+	//Child constructor, create subclasses cache here
 	FClassPropertyCache( FClassPropertyCache* InNext, UClass* InClass);
 
+
+	//Chained list lookup
 	FClassPropertyCache* GetCache( UClass* Other);
+
+	//Property lookup
+	UProperty* GetNamedProperty( const TCHAR* PropertyName);
+
 	inline UBOOL IsCached( UClass* Other)
 	{
 		return GetCache( Other) != NULL;
 	}
 	
-	void GrabProperties( FMemStack& Mem);
-
 	virtual UBOOL AcceptProperty( UProperty* Property)
 	{
 		return true;
 	}
-	virtual FClassPropertyCache* CreateParent( FMemStack& Mem)
+
+	void GrabProperties( FMemStack& Mem);
+};
+
+//Templated holder
+template <class T> struct TClassPropertyCacheHolder
+{
+	UClass* TopClass;
+	FMemStack* Mem;
+	FMemMark Mark;
+	T* List;
+
+	TClassPropertyCacheHolder( UClass* RootClass, FMemStack* MemStack)
 	{
-		return new(Mem) FClassPropertyCache( Next, Class->GetSuperClass() );
+		TopClass = RootClass;
+		Mem = MemStack;
+		Mark = FMemMark(*Mem);
+		List = new(*Mem) T(RootClass);
+		List->GrabProperties(*Mem);
 	}
+
+	~TClassPropertyCacheHolder()
+	{
+		Mark.Pop();
+	}
+
+	T* GetCache( UClass* Class)
+	{
+		if ( Class && Class->IsChildOf(TopClass) )
+			return SetupCache(Class);
+		return nullptr;
+	}
+
+private:
+	//Top class check passed
+	T* SetupCache( UClass* Class)
+	{
+		T* Found = (T*)List->GetCache( Class);
+		if ( !Found )
+		{
+			T* Parent = SetupCache( Class->GetSuperClass() );
+			check(Parent);
+			List = new(*Mem) T( List, Class);
+			List->GrabProperties(*Mem);
+			Found = List;
+		}
+		return Found;
+	}
+
+private:
+	TClassPropertyCacheHolder();
 };
 
 #endif

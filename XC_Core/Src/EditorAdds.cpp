@@ -115,19 +115,36 @@ static EditorHookHelper_XC_CORE Helper; //Makes C runtime init construct this ob
 //
 XC_CORE_API FString CleanupLevel( ULevel* Level)
 {
+	int32 i;
 	FString Result;
 	if ( GIsEditor )
 	{
 		guard(ShrinkActorList);
 		int32 OldSize = Level->Actors.Num();
 		Level->CleanupDestroyed(1);
+		int32 Duplicates = 0;
+		for ( i=0 ; i<Level->Actors.Num() ; i++ )
+			if ( Level->Actors(i) )
+				Level->Actors(i)->OtherTag = -1;
+		for ( i=0 ; i<Level->Actors.Num() ; i++ )
+			if ( Level->Actors(i) )
+			{
+				if ( Level->Actors(i)->OtherTag == -1 )
+					Level->Actors(i)->OtherTag = 0;
+				else
+				{
+					Level->Actors(i) = nullptr;
+					Duplicates++;
+				}
+			}
 		Level->CompactActors();
+		if ( Duplicates )
+			Result += FString::Printf( TEXT("Removed %i duplicate actor entries. \r\n"), Duplicates);
 		if ( Level->Actors.Num() != OldSize )
 			Result += FString::Printf( TEXT("Actor list size shrunk from %i to %i elements.\r\n"), OldSize, Level->Actors.Num() );
 		unguard
 
 		guard(RemoveUnusedTextures)
-		int32 i;
 		TMap<UTexture*,int32> TextureMap;
 		//Cleanup all textures from brushes
 		for ( i=2 ; i<Level->Actors.Num() ; i++ ) //Doesn't include brush builder
