@@ -11,6 +11,12 @@ struct FSaveSummary;
 
 namespace XC
 {
+	enum ESaveFlags
+	{
+		SAVE_Full = 0x00,
+		SAVE_NoGame = 0x01,
+	};
+
 	XC_CORE_API void GetSaveGameList( TArray<FSaveSummary>& SaveList);
 	XC_CORE_API UBOOL LoadSaveGameSummary( FSaveSummary& SaveSummary, const TCHAR* FileName);
 	XC_CORE_API UBOOL SaveGame( ULevel* Level, const TCHAR* FileName, uint32 SaveFlags=0);

@@ -7,6 +7,7 @@
 #define CURRENT_FILE_VERSION 1
 static int32 FileVersion = CURRENT_FILE_VERSION;
 static FName FNAME_None( NAME_None);
+static struct FSaveFile* GSaveFile;
 
 static FNameEntry* GetNameEntry( FName& N)
 {
@@ -23,6 +24,44 @@ struct FArchiveSetError : public FArchive
 	}
 };
 
+struct FPropertySaver
+{
+	UObject* Object;
+	int32 Offset;
+	TArray<uint8> Data;
+
+	FPropertySaver( UObject* InObject, int32 InOffset, int32 InSize)
+		: Object(InObject), Offset(InOffset), Data(InSize)
+	{
+		appMemcpy( Data.GetData(), (void*)((PTRINT)Object + Offset), InSize);
+	}
+
+	~FPropertySaver()
+	{
+		appMemcpy( (void*)((PTRINT)Object + Offset), Data.GetData(), Data.Num() );
+	}
+};
+#define OFFSET_AND_SIZE(STR,PROP) STRUCT_OFFSET(STR,PROP), sizeof(STR::PROP)
+
+static void FixStruct( UStruct* Struct)
+{
+	if ( Struct->GetSuperStruct() && !Struct->GetSuperStruct()->PropertiesSize )
+		FixStruct( Struct->GetSuperStruct() );
+
+	int32 BaseOffset = Struct->GetSuperStruct() ? Struct->GetSuperStruct()->PropertiesSize : 0;
+	for ( UProperty* Prop=Struct->PropertyLink ; Prop ; Prop=Prop->PropertyLinkNext )
+	{
+		if ( (Prop->Offset == 0) && (BaseOffset != 0) )
+		{
+			debugf( TEXT("ZERO PROP %s (%i) >>> %s"), Prop->GetPathName(), Prop->Offset, ObjectPathName(Prop->PropertyLinkNext) );
+			FArchive ArDummy;
+			Struct->Link( ArDummy, 1);
+		}
+		if ( Cast<UStructProperty>(Prop) )
+			FixStruct( ((UStructProperty*)Prop)->Struct );
+	}
+}
+
 
 /*-----------------------------------------------------------------------------
 	Save file private containers
@@ -32,6 +71,7 @@ struct FIndexedNameArray : protected TArray<FName>
 {
 	using FArray::Num;
 	using TArray<FName>::operator();
+	using FArray::IsValidIndex;
 
 	int32 GetIndex( FName Name);
 
@@ -82,6 +122,7 @@ struct FSaveFile
 	ULevel* Level;
 
 	int32 GetSavedIndex( UObject* Object);
+	UObject* GetSavedObject( int32 SavedIndex);
 
 	friend FArchive& operator<<( FArchive& Ar, FSaveFile& S);
 };
@@ -205,7 +246,7 @@ UBOOL FSaveSummary::IsValid()
 //
 int32 FIndexedNameArray::GetIndex( FName N)
 {
-	guard(FSaveFile::GetNameIndex);
+	guard(FIndexedNameArray::GetIndex);
 	FNameEntry* Entry = GetNameEntry(N);
 	if ( !Entry )
 		return 0;
@@ -258,6 +299,16 @@ int32 FSaveFile::GetSavedIndex( UObject* Object)
 	return 0;
 }
 
+UObject* FSaveFile::GetSavedObject( int32 SavedIndex)
+{
+	guard(FSaveFile::GetSavedObject);
+	if ( !SavedIndex )
+		return nullptr;
+	check(Elements.IsValidIndex(SavedIndex-1));
+	return Elements(SavedIndex-1).Object;
+	unguard;
+}
+
 /*-----------------------------------------------------------------------------
 	Serializers
 -----------------------------------------------------------------------------*/
@@ -273,13 +324,19 @@ public:
 	int32 Pos;
 	TArray<BYTE> Buffer;
 
+	UObject* RealObject;
+
 	FArchiveLinkerSerializer( UObject* RealObject, UObject* FakeDefaults)
 	{
 		ArIsLoading = 1;
 		ArIsPersistent = 1;
 
+		this->RealObject = RealObject; //Kept for logging
+
 		Linker = RealObject->GetLinker();
-		auto SavedPos = Linker->Loader->Tell();
+		check(Linker);
+		check(Linker->Loader);
+		int32 SavedPos = Linker->Loader->Tell();
 		FObjectExport& Export = Linker->ExportMap( RealObject->GetLinkerIndex() );
 		Linker->Loader->Seek( Export.SerialOffset );
 		Linker->Loader->Precache( Export.SerialSize );
@@ -330,7 +387,10 @@ public:
 			Index--;
 			Object = Linker->ExportMap( Index )._Object;
 			if ( !Object || Object->IsPendingKill() )
-				Object = (UObject*)-1; //HACK TO FORCE A DELTA!
+			{
+				Object = GSys; //HACK TO FORCE A DELTA!
+//				debugf( TEXT("Forcing deleted delta in for export on %s! (%s)"), RealObject->GetName(), *Linker->ExportMap( Index ).ObjectName );
+			}
 		}
 		else if ( Index < 0 ) //This is one of the level's imports
 		{
@@ -348,7 +408,7 @@ public:
 			if ( !Object )
 			{
 				debugf( TEXT("Failed to locate import %s (%s.%s) %i"), *Import.ObjectName, *Import.ClassPackage, *Import.ClassName, Import.PackageIndex);
-				Object = (UObject*)-1; //HACK TO FORCE A DELTA!
+				Object = GSys; //HACK TO FORCE A DELTA!
 			}
 		}
 		return *this;
@@ -404,6 +464,7 @@ public:
 		guard(FArchiveGameLoader::Name<<);
 		int32 Index;
 		*this << AR_INDEX( Index );
+		check( SaveData->Names.IsValidIndex(Index) );
 		N = SaveData->Names(Index); //TODO: NEEDS ERROR HANDLING
 		return *this;
 		unguard;
@@ -414,10 +475,7 @@ public:
 		guard(FArchiveGameLoader::Object<<);
 		int32 Index;
 		*this << AR_INDEX( Index );
-		if ( Index > 0 ) //TODO: NEEDS ERROR HANDLING
-			Object = SaveData->Elements(Index-1).Object;
-		else
-			Object = nullptr;
+		Object = SaveData->GetSavedObject(Index);
 		return *this;
 		unguard;
 	}
@@ -433,9 +491,10 @@ class FArchiveGameSaver : public FArchive
 {
 public:
 	FSaveFile* SaveData;
+	UBOOL bLog;
 
 	FArchiveGameSaver( FSaveFile* InSaveData)
-		: SaveData(InSaveData)
+		: SaveData(InSaveData), bLog(0)
 	{
 		ArIsSaving = 1;
 		ArIsPersistent = 1;
@@ -443,19 +502,24 @@ public:
 
 	virtual FArchive& operator<<( class FName& N )
 	{
+		if ( bLog )
+			debugf( TEXT("... Getting indexed name %s"), *N);
 		int32 Index = SaveData->Names.GetIndex(N);
-//		debugf( TEXT("... Indexing name [%i]=%s"), Index, *N);
 		return *this << AR_INDEX( Index);
 	}
 
 	virtual FArchive& operator<<( UObject*& Object )
 	{
+		if ( bLog )
+			debugf( TEXT("... Getting indexed object %s"), ObjectPathName(Object) );
 		int32 Index = SaveData->GetSavedIndex( Object );
 		return *this << AR_INDEX( Index);
 	}
 
 	virtual INT MapObject( UObject* Object )
 	{
+		if ( bLog )
+			debugf( TEXT("... Getting mapped object %s"), ObjectPathName(Object) );
 		return (Object && (Object->GetFlags() & (RF_TagExp))) ? SaveData->GetSavedIndex(Object) : 0;
 	}
 };
@@ -466,7 +530,7 @@ public:
 class FArchiveGameSaverBuffer : public FArchiveGameSaver
 {
 public:
-	TArray<BYTE> Buffer;
+	TArray<uint8> Buffer;
 
 	FArchiveGameSaverBuffer( FSaveFile* InSaveData)
 		: FArchiveGameSaver(InSaveData)
@@ -474,6 +538,8 @@ public:
 
 	virtual void Serialize( void* V, INT Length )
 	{
+		if ( bLog )
+			debugf( TEXT("Writing %i to buffer (%i)"), Length, Buffer.Num() );
 		int32 Offset = Buffer.Add( Length );
 		appMemcpy( &Buffer(Offset), V, Length);
 	}
@@ -488,29 +554,29 @@ class FArchiveGameSaverTag : public FArchiveGameSaver
 public:
 	using FArchiveGameSaver::FArchiveGameSaver;
 
-	virtual FArchive& operator<<( UObject*& Res )
+	virtual FArchive& operator<<( UObject*& Object )
 	{
 		guard(FArchiveGameSaverTag::<<);
-		if ( Res && !(Res->GetFlags() & RF_TagExp) && !Res->IsPendingKill()  )
+		if ( Object && !(Object->GetFlags() & RF_TagExp) && !Object->IsPendingKill() )
 		{
-			Res->SetFlags(RF_TagExp);
-			if ( !Res->IsIn(UObject::GetTransientPackage()) )
+			Object->SetFlags(RF_TagExp);
+			if ( !Object->IsIn(UObject::GetTransientPackage()) )
 			{
-				if ( !(Res->GetFlags() & RF_Transient) || Res->IsA(UField::StaticClass()) )
+				if ( !(Object->GetFlags() & RF_Transient) || Object->IsA(UField::StaticClass()) )
 				{
 					//Automatically adds super imports
-					FSaveGameElement Element( Res, *this); 
+					FSaveGameElement Element( Object, *this); 
 					int32 Index = SaveData->Elements.AddZeroed();
 					ExchangeRaw( SaveData->Elements(Index), Element);
 
 					//Continue tagging via recursion
-					if ( Res->IsIn(SaveData->Level->GetOuter()) )
-						Res->Serialize( *this );
+					if ( Object->IsIn(SaveData->Level->GetOuter()) )
+						Object->Serialize( *this );
 				}
 			}
 		}
 		return *this;
-		unguardf(( TEXT("(%s)"), ObjectFullName(Res) ));
+		unguardf(( TEXT("(%s)"), ObjectFullName(Object) ));
 	}
 };
 
@@ -527,21 +593,23 @@ public:
 		: FArchiveGameSaverBuffer(InSaveData), i(0)
 	{}
 
-	virtual FArchive& operator<<( UObject*& Obj)
+	virtual FArchive& operator<<( UObject*& Object)
 	{
-		int32 Index = SaveData->GetSavedIndex(Obj);
-		AddObject( Index );
+		if ( bLog )	debugf( TEXT("... Getting indexed object %s"), ObjectPathName(Object) );
+		int32 Index = SaveData->GetSavedIndex(Object);
+		if ( Index )
+			AddObject( Index );
 		return *this << AR_INDEX( Index);
 	}
 
 	bool AddObject( int32 Index)
 	{
 		Index--;
-		if ( (Index < 0) || (Index >= SaveData->Elements.Num()) )
-			return false;
-
+		check( SaveData->Elements.IsValidIndex(Index) );
 		FSaveGameElement& Element = SaveData->Elements(Index);
-		if ( Element.DataQueued || !Element.Object->IsIn(SaveData->Level->GetOuter()) )
+		if ( !Element.Object || Element.DataQueued || !Element.Object->IsIn(SaveData->Level->GetOuter())
+			|| Element.Object->IsA(UPrimitive::StaticClass() )
+			|| Element.Object->IsA(UBitmap::StaticClass()) ) //May break scripted textures!!
 			return false;
 
 		Element.DataQueued = 1;
@@ -554,16 +622,22 @@ public:
 		guard(FArchiveGameSaverProperties::ProcessObjects)
 		for ( ; i<ObjectIndices.Num() ; i++ )
 		{
-			TArray<BYTE> SavedDefaults;
+			check( SaveData->Elements.IsValidIndex(ObjectIndices(i)) );
+			TArray<uint8> SavedDefaults;
 			FSaveGameElement& Element = SaveData->Elements( ObjectIndices(i) );
 			UObject* Object = Element.Object;
+			check(Object);
+			if ( bLog ) debugf( TEXT("Process object: %s"), Object->GetPathName() );
 
 			//Temporarily swap defaults so we obtain a delta of the Import instead of class defaults.
 			Element.IsImport = Object->GetLinker() && (Object->GetLinkerIndex() != INDEX_NONE);
 			if ( Element.IsImport )
 			{
-				SavedDefaults = Object->GetClass()->Defaults;
-				FArchiveLinkerSerializer ArLinker( Object, (UObject*)SavedDefaults.GetData() );
+				SavedDefaults.AddZeroed( Object->GetClass()->PropertiesSize );
+				for ( TFieldIterator<UProperty>It(Object->GetClass()) ; It ; ++It )
+					if ( !(It->PropertyFlags & CPF_Transient) && (It->Offset >= sizeof(UObject)) )
+						It->CopyCompleteValue( &SavedDefaults(It->Offset), &Object->GetClass()->Defaults(It->Offset));
+				FArchiveLinkerSerializer ArLinker( Object, (UObject*)&SavedDefaults(0) );
 				ArLinker.Start();
 				ExchangeRaw( Object->GetClass()->Defaults, SavedDefaults);
 			}
@@ -571,10 +645,13 @@ public:
 			Object->Serialize( *this );
 			ExchangeRaw( Buffer, Element.Data);
 			Buffer.Empty();
-//			debugf( TEXT("Serialized %i bytes of %s"), Element.Data.Num(), ObjectPathName( Object) );
+			if ( bLog )	debugf( TEXT("Serialized %i bytes of %s"), Element.Data.Num(), ObjectPathName( Object) );
 
 			if ( Element.IsImport )
+			{
 				ExchangeRaw( Object->GetClass()->Defaults, SavedDefaults);
+				UObject::ExitProperties( &SavedDefaults(0), Object->GetClass() );
+			}
 		}
 		unguard;
 	}
@@ -665,24 +742,77 @@ XC_CORE_API UBOOL SaveGame( ULevel* Level, const TCHAR* FileName, uint32 SaveFla
 		return 0;
 	}
 
+/*	TArray<FPropertySaver> PropertyBackups;
+	new(PropertyBackups) FPropertySaver( Level->GetLevelInfo(), OFFSET_AND_SIZE(ALevelInfo,Summary));
+	Level->GetLevelInfo()->Summary = nullptr;*/
+
 	guard(UntagInitial);
+	TArray<APlayerPawn*> Players;
+	TArray<AGameInfo*> Games;
 	for( FObjectIterator It; It; ++It )
 	{
-		if ( It->IsA(AStatLog::StaticClass()) ) //Do not export these classes
+		if ( It->IsA(AStatLog::StaticClass()) || //Do not export these classes
+			It->IsA(ULevelSummary::StaticClass()) ) 
+			It->SetFlags( RF_TagExp );
+		//Don't save Game and derivates
+		else if ( (SaveFlags & SAVE_NoGame) && It->IsA(AGameInfo::StaticClass()) )
+			Games.AddItem( (AGameInfo*)*It);
+		//Don't save Players and derivates
+		else if ( (SaveFlags & SAVE_NoGame) && It->IsA(APlayerPawn::StaticClass()) )
+			Players.AddItem( (APlayerPawn*)*It);
+		//Don't save mutators (except embedded)
+		else if ( (SaveFlags & SAVE_NoGame) && It->IsA(AMutator::StaticClass()) && !It->GetLinker() && (It->GetLinkerIndex() == INDEX_NONE) )
 			It->SetFlags( RF_TagExp );
 		else
 			It->ClearFlags( RF_TagExp );
 	}
+	for ( int32 i=0 ; i<Players.Num() ; i++ )
+	{
+		Players(i)->SetFlags( RF_TagExp );
+		if ( Players(i)->myHUD ) Players(i)->myHUD->SetFlags( RF_TagExp );
+		if ( Players(i)->Scoring ) ((UObject*)Players(i)->Scoring)->SetFlags( RF_TagExp );
+		if ( Players(i)->PlayerReplicationInfo ) Players(i)->PlayerReplicationInfo->SetFlags( RF_TagExp );
+		for ( AInventory* Inv=Players(i)->Inventory ; Inv ; Inv=Inv->Inventory )
+			Inv->SetFlags( RF_TagExp );
+	}
+	for ( int32 i=0 ; i<Games.Num() ; i++ )
+	{
+		Games(i)->SetFlags( RF_TagExp );
+		if ( Games(i)->GameReplicationInfo )
+			Games(i)->GameReplicationInfo->SetFlags( RF_TagExp );
+	}
+
 	for( int32 i=0; i<FName::GetMaxNames(); i++ )
 		if( FName::GetEntry(i) )
 			FName::GetEntry(i)->Flags &= ~(RF_TagExp);
 	unguard;
 
 	FSaveFile SaveFile;
+	GSaveFile = &SaveFile;
 	SaveFile.Level = Level;
 //	SaveFile.Summary.Players;
 	SaveFile.Summary.LevelTitle = Level->GetLevelInfo()->Title;
 //	SaveFile.Summary.Notes;
+
+	//Treat the game's URL
+	SaveFile.Summary.URL = Level->URL;
+	SaveFile.Summary.URL.Host = TEXT("");
+	SaveFile.Summary.URL.Port = 0;
+	for ( int32 i=SaveFile.Summary.URL.Op.Num()-1 ; i>=0 ; i-- )
+	{
+		if ( !appStrnicmp(*SaveFile.Summary.URL.Op(i),TEXT("name=")) ||
+			!appStrnicmp(*SaveFile.Summary.URL.Op(i),TEXT("listen")) ||
+			!appStrnicmp(*SaveFile.Summary.URL.Op(i),TEXT("checksum=")) )
+			SaveFile.Summary.URL.Op.Remove(i);
+		if ( ( SaveFlags & SAVE_NoGame ) &&
+			(	!appStrnicmp(*SaveFile.Summary.URL.Op(i),TEXT("class=")) ||
+				!appStrnicmp(*SaveFile.Summary.URL.Op(i),TEXT("skin=")) ||
+				!appStrnicmp(*SaveFile.Summary.URL.Op(i),TEXT("face=")) ||
+				!appStrnicmp(*SaveFile.Summary.URL.Op(i),TEXT("overrideclass=")) ||
+				!appStrnicmp(*SaveFile.Summary.URL.Op(i),TEXT("voice=")) ||
+				!appStrnicmp(*SaveFile.Summary.URL.Op(i),TEXT("team=")) ))
+			SaveFile.Summary.URL.Op.Remove(i);
+	}
 	SaveFile.Summary.GUID = ((ULinker*)Level->GetLinker())->Summary.Guid;
 	SaveFile.TravelInfo = Level->TravelInfo;
 
@@ -698,7 +828,7 @@ XC_CORE_API UBOOL SaveGame( ULevel* Level, const TCHAR* FileName, uint32 SaveFla
 	{
 		int32 Index = SaveFile.GetSavedIndex(Level->Actors(i));
 		SaveFile.ActorList.AddItem(Index);
-		if ( ArProp.AddObject(Index) )
+		if ( Index && ArProp.AddObject(Index) )
 			ArProp.ProcessObjects();
 	}
 	unguard;
@@ -728,6 +858,7 @@ XC_CORE_API UBOOL LoadGame( ULevel* Level, const TCHAR* FileName)
 		return false;
 
 	FSaveFile SaveFile;
+	GSaveFile = &SaveFile;
 	guard(LoadFromFile);
 	FArchive* Loader = GFileManager->CreateFileReader( FileName, FILEWRITE_EvenIfReadOnly);
 	if ( !Loader || !Loader->TotalSize() || Loader->IsError() )
@@ -751,6 +882,7 @@ XC_CORE_API UBOOL LoadGame( ULevel* Level, const TCHAR* FileName)
 
 	//Names are already autogenerated during load process
 	guard(SetupImports);
+	UBOOL bFoundUPackage = 0;
 	for ( int32 i=0 ; i<SaveFile.Elements.Num() ; i++ )
 	{
 		//Setup name
@@ -763,16 +895,29 @@ XC_CORE_API UBOOL LoadGame( ULevel* Level, const TCHAR* FileName)
 		}
 		Element.Name = SaveFile.Names( NameIndex);
 
+		//Hardcode package
+		if ( (Element.Name == NAME_Package) && !Element.WithinIndex && !Element.ClassIndex && !bFoundUPackage )
+		{
+			bFoundUPackage++;
+			Element.Object = UPackage::StaticClass();
+			continue;
+		}
+
 		//Setup outer
 		FString PathName;
 		FSaveGameElement* ElementPtr = &Element;
-		while ( ElementPtr )
+		while ( ElementPtr && (ElementPtr->Name != NAME_None) )
 		{
 			if ( PathName.Len() )
 				PathName = FString(TEXT(".")) + PathName;
 			PathName = FString(*ElementPtr->Name) + PathName;
 
 			int32 WithinIndex = ElementPtr->WithinIndex;
+
+			//Hack fix, objects and classes in level should already be preloaded
+			if ( !WithinIndex && (Element.IsImport == 2) && !appStricmp( *ElementPtr->Name, Level->GetOuter()->GetName()) )
+				Element.IsImport = 1;
+
 			ElementPtr = nullptr;
 			if ( WithinIndex > SaveFile.Elements.Num() )
 			{
@@ -796,12 +941,19 @@ XC_CORE_API UBOOL LoadGame( ULevel* Level, const TCHAR* FileName)
 		else if ( !Element.WithinIndex ) //This is package
 			Class = UPackage::StaticClass();
 
-
 		guard(AssociateObject);
 		Element.Object = nullptr;
+		UObject* Outer = SaveFile.GetSavedObject(Element.WithinIndex);
+		//Attempt exact match
+		if ( Outer )
+			Element.Object = UObject::StaticFindObject( Class, Outer, *Element.Name, Class != nullptr);
+		//Attempt path match
+		if ( !Element.Object )
+			Element.Object = UObject::StaticFindObject( Class, nullptr, *PathName, Class != nullptr);
 		if ( Element.IsImport == 2 )
 		{
-			Element.Object = UObject::StaticFindObject( Class, nullptr, *PathName, Class != nullptr);
+			if ( !Element.Object && (Class == UPackage::StaticClass()) && !Element.WithinIndex )
+				Element.Object = UObject::LoadPackage( nullptr, *PathName, LOAD_Quiet);
 			if ( !Element.Object && Class )
 				Element.Object = UObject::StaticLoadObject( Class, nullptr, *PathName, nullptr, LOAD_Quiet, nullptr);
 			if ( !Element.Object )
@@ -809,14 +961,12 @@ XC_CORE_API UBOOL LoadGame( ULevel* Level, const TCHAR* FileName)
 		}
 		else if ( Element.IsImport == 1 )
 		{
-			Element.Object = UObject::StaticFindObject( Class, nullptr, *PathName, Class != nullptr);
 			if ( !Element.Object ) //Failed imports don't count
 				GWarn->Logf( TEXT("LoadGame: failed import %s (%s)"), *PathName, ObjectPathName(Class));
 		}
 		else
 		{
-			Element.Object = UObject::StaticFindObject( nullptr, nullptr, *PathName, 0);
-			if ( Element.Object ) //Rename old object if it's interfering with an import
+			if ( Element.Object )
 			{
 				if ( Element.Object->GetClass() == Class ) //Attempt to replace
 					Element.Object = UObject::StaticConstructObject( Class, Element.Object->GetOuter(), Element.Name, Element.Object->GetFlags() );
@@ -843,9 +993,13 @@ XC_CORE_API UBOOL LoadGame( ULevel* Level, const TCHAR* FileName)
 			if ( Element.Object )
 			{
 				Element.Object->ClearFlags( RF_Load );
-				Element.Object->SetFlags( Element.ObjectFlags );
+				Element.Object->SetFlags( Element.ObjectFlags & RF_Load );
 			}
 		}
+
+		if ( appStricmp(*PathName, ObjectPathName(Element.Object)) )
+			debugf( TEXT("Bad object relink: %s to %s (import type %i)"), *PathName, ObjectPathName(Element.Object), (int32)Element.IsImport );
+
 		unguard;
 //		debugf( TEXT("Setting up element %s (%s) as %s"), *PathName, ObjectPathName(Class), ObjectPathName(Element.Object) );
 	}
@@ -857,9 +1011,13 @@ XC_CORE_API UBOOL LoadGame( ULevel* Level, const TCHAR* FileName)
 		FSaveGameElement& Element = SaveFile.Elements(i);
 		if ( Element.Object && Element.Data.Num() ) //TODO: CHECK IF IN LEVEL?
 		{
+			guard(Element);
+			if ( !Element.Object->IsA(UField::StaticClass()) )
+				FixStruct( Element.Object->GetClass() );
 //			debugf( TEXT("Loading properties for %s (%i)"), ObjectPathName(Element.Object), Element.Data.Num() );
 			FArchiveGameLoader ArLoader( &SaveFile, &Element.Data);
 			Element.Object->Serialize( ArLoader );
+			unguardf( (TEXT("%s"), Element.Object->GetPathName()) );
 		}
 	}
 	unguard;
@@ -869,18 +1027,7 @@ XC_CORE_API UBOOL LoadGame( ULevel* Level, const TCHAR* FileName)
 	int32 ActorCount = SaveFile.ActorList.Num();
 	Level->Actors.SetSize( ActorCount );
 	for ( int32 i=0 ; i<ActorCount ; i++ )
-	{
-		int32 Index = SaveFile.ActorList(i);
-		if ( !Index )
-			Level->Actors(i) = nullptr;
-		else if ( !SaveFile.Elements.IsValidIndex(Index-1) )
-		{
-			debugf( TEXT("LoadGame error: invalid object index in actor list %i/%i"), Index, SaveFile.Elements.Num() );
-			return 0;
-		}
-		else
-			Level->Actors(i) = Cast<AActor>(SaveFile.Elements(Index-1).Object); //TODO: FAIL IF NOT ACTOR
-	}
+		Level->Actors(i) = Cast<AActor>(SaveFile.GetSavedObject(SaveFile.ActorList(i))); //TODO: FAIL IF NOT ACTOR
 	unguard;
 
 	guard(SetupReachSpecs);

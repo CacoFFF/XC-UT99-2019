@@ -15,7 +15,7 @@ class BinarySerializer expands Object
 //[UCC EXPORTHEADERS] directives, not yet supported
 #exec _cpptext void Destroy(); 
 
-var native const int Archive; //c++ Pointer
+var native const pointer Archive;
 var native const bool bWrite;
 
 // Serialization functions all modify the OUT parameters if file is in read mode
@@ -48,7 +48,7 @@ native final function bool OpenFileRead( string FileName);
 native final function bool OpenFileWrite( string FileName, optional bool bAppend);
 native final function bool CloseFile();
 
-//Return -1 if archive not open, i should instead crash the game
+//Return -1 if archive not open, I should instead crash the game
 native final function int Position();
 native final function int TotalSize();
 

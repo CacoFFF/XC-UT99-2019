@@ -72,5 +72,8 @@ template < INT cmpsize > inline INT appStrncmp( const TCHAR* S1, const TCHAR(&S2
 	return appStrncmp( S1, S2, cmpsize-1);
 }
 
-
+template < INT cmpsize > inline INT appStrnicmp( const TCHAR* S1, const TCHAR(&S2)[cmpsize])
+{
+	return appStrnicmp( S1, S2, cmpsize-1);
+}
 #endif
