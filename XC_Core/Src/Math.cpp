@@ -17,11 +17,21 @@ CFVector4 TestSQ( const CFVector4& A, const CFVector4& B)
 // Dist must be a FLOAT[2] array
 void DoublePlaneDot( const FPlane& Plane, const CFVector4& Start, const CFVector4& End, FLOAT* Dist2)
 {
-	CFVector4 VPlane( &Plane.X);
-	CFVector4 VStart = _mm_or_ps( _mm_and_ps( Start, CIVector4::MASK_3D), WMinusOne); // Set W to -1
-	CFVector4 VEnd   = _mm_or_ps( _mm_and_ps( End  , CIVector4::MASK_3D), WMinusOne); // ORPS has very low latency and CPI
-	Dist2[0] = VStart | VPlane;
-	Dist2[1] = VEnd   | VPlane;
+#if USES_SSE_INTRINSICS
+	if ( sizeof(FPlane) == 16 )
+	{
+		CFVector4 VPlane( &Plane.X);
+		CFVector4 VStart = _mm_or_ps( _mm_and_ps( Start, CIVector4::MASK_3D), WMinusOne); // Set W to -1
+		CFVector4 VEnd   = _mm_or_ps( _mm_and_ps( End  , CIVector4::MASK_3D), WMinusOne); // ORPS has very low latency and CPI
+		Dist2[0] = VStart | VPlane;
+		Dist2[1] = VEnd   | VPlane;
+	}
+	else
+#endif
+	{
+		Dist2[0] = Plane.PlaneDot( *(FVector*)&Start);
+		Dist2[1] = Plane.PlaneDot( *(FVector*)&End);
+	}
 }
 
 

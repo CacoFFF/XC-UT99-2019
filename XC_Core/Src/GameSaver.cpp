@@ -45,17 +45,22 @@ struct FPropertySaver
 
 static void FixStruct( UStruct* Struct)
 {
-	if ( Struct->GetSuperStruct() && !Struct->GetSuperStruct()->PropertiesSize )
-		FixStruct( Struct->GetSuperStruct() );
-
-	int32 BaseOffset = Struct->GetSuperStruct() ? Struct->GetSuperStruct()->PropertiesSize : 0;
 	for ( UProperty* Prop=Struct->PropertyLink ; Prop ; Prop=Prop->PropertyLinkNext )
 	{
-		if ( (Prop->Offset == 0) && (BaseOffset != 0) )
+		if ( Prop->Offset == 0 )
 		{
-			debugf( TEXT("ZERO PROP %s (%i) >>> %s"), Prop->GetPathName(), Prop->Offset, ObjectPathName(Prop->PropertyLinkNext) );
-			FArchive ArDummy;
-			Struct->Link( ArDummy, 1);
+			UStruct* Container = Cast<UStruct>( Prop->GetOuter() );
+			if ( Container && Container->GetSuperStruct() )
+			{
+				if ( !Container->GetSuperStruct()->PropertiesSize )
+					FixStruct( Container->GetSuperStruct() );
+				if ( Container->GetSuperStruct()->PropertiesSize )
+				{
+					debugf( TEXT("ZERO PROP %s >>> %s (%s)"), Prop->GetPathName(), *FObjectPathName(Prop->PropertyLinkNext), Container->GetPathName() );
+					FArchive ArDummy;
+					Struct->Link( ArDummy, 1);
+				}
+			}
 		}
 		if ( Cast<UStructProperty>(Prop) )
 			FixStruct( ((UStructProperty*)Prop)->Struct );
@@ -325,6 +330,7 @@ public:
 	TArray<BYTE> Buffer;
 
 	UObject* RealObject;
+	UBOOL bLog;
 
 	FArchiveLinkerSerializer( UObject* RealObject, UObject* FakeDefaults)
 	{
@@ -332,6 +338,7 @@ public:
 		ArIsPersistent = 1;
 
 		this->RealObject = RealObject; //Kept for logging
+		bLog = /*RealObject->IsA(ALevelInfo::StaticClass())*/0;
 
 		Linker = RealObject->GetLinker();
 		check(Linker);
@@ -348,22 +355,26 @@ public:
 		SerializeInto = FakeDefaults;
 		*(PTRINT*)SerializeInto = *(PTRINT*)RealObject; //Copy vtable
 		SerializeInto->SetClass( RealObject->GetClass() );
-		SerializeInto->SetFlags( RF_NeedLoad | RF_Preloading | (RealObject->GetFlags() & RF_HasStack) );
+		SerializeInto->SetFlags( RF_NeedLoad | RF_Preloading | (Export.ObjectFlags & RF_HasStack) );
 	}
 
 
 	void Start()
 	{
+		check(RealObject);
+
 		guard(SerializeImportFromLevel);
 		SerializeInto->Serialize( *this );
 		SerializeInto->ConditionalPostLoad();
 		if ( SerializeInto->GetStateFrame() )
 			delete SerializeInto->GetStateFrame();
-		unguard;
+		unguardf( (TEXT("%s"), RealObject->GetPathName() ) );
+
 	}
 
 	void Serialize( void* V, INT Length ) override
 	{
+		if ( bLog )	debugf( TEXT("Writing %i to buffer (%i)"), Length, Pos );
 		appMemcpy( V, &Buffer(Pos), Length);
 		Pos += Length;
 	}
@@ -415,6 +426,7 @@ public:
 	}
 	FArchive& operator<<( FName& Name )
 	{
+		if ( bLog )	debugf( TEXT("... Getting indexed name %s"), *Name);
 		NAME_INDEX NameIndex;
 		*this << AR_INDEX(NameIndex);
 		if( !Linker->NameMap.IsValidIndex(NameIndex) )
@@ -434,9 +446,10 @@ public:
 	FSaveFile* SaveData;
 	TArray<uint8>* Buffer;
 	int32 Pos;
+	UBOOL bLog;
 
 	FArchiveGameLoader( FSaveFile* InSaveData, TArray<uint8>* InBuffer)
-		: SaveData(InSaveData), Buffer(InBuffer), Pos(0)
+		: SaveData(InSaveData), Buffer(InBuffer), Pos(0), bLog(0)
 	{
 		ArIsLoading = 1;
 		ArIsPersistent = 1;
@@ -447,11 +460,14 @@ public:
 		guard(FArchiveGameLoader::Serialize);
 		if ( Pos + Length > Buffer->Num() )
 		{
-			GWarn->Logf( TEXT("FArchiveGameLoader going out of bounds %i -> %i / %i"), Pos, Pos+Length, Buffer->Num() );
+			if ( Pos <= Buffer->Num() ) //Only log once
+				GWarn->Logf( TEXT("FArchiveGameLoader going out of bounds %i -> %i / %i"), Pos, Pos+Length, Buffer->Num() );
 			appMemzero( V, Length);
 		}
 		else
 		{
+			if ( bLog )
+				debugf( TEXT("...Loading %i (%i)"), Length, Pos);
 			uint8* Data = (uint8*)Buffer->GetData() + (PTRINT)Pos;
 			appMemcpy( V, Data, Length);
 		}
@@ -466,6 +482,7 @@ public:
 		*this << AR_INDEX( Index );
 		check( SaveData->Names.IsValidIndex(Index) );
 		N = SaveData->Names(Index); //TODO: NEEDS ERROR HANDLING
+		if ( bLog ) debugf( TEXT(".... Name %s (%i)"), *N, Index);
 		return *this;
 		unguard;
 	}
@@ -476,6 +493,8 @@ public:
 		int32 Index;
 		*this << AR_INDEX( Index );
 		Object = SaveData->GetSavedObject(Index);
+		if ( bLog )
+			debugf( TEXT(".... Object %s (%i)"), *FObjectPathName(Object), Index);
 		return *this;
 		unguard;
 	}
@@ -511,7 +530,7 @@ public:
 	virtual FArchive& operator<<( UObject*& Object )
 	{
 		if ( bLog )
-			debugf( TEXT("... Getting indexed object %s"), ObjectPathName(Object) );
+			debugf( TEXT("... Getting indexed object %s"), *FObjectPathName(Object) );
 		int32 Index = SaveData->GetSavedIndex( Object );
 		return *this << AR_INDEX( Index);
 	}
@@ -519,7 +538,7 @@ public:
 	virtual INT MapObject( UObject* Object )
 	{
 		if ( bLog )
-			debugf( TEXT("... Getting mapped object %s"), ObjectPathName(Object) );
+			debugf( TEXT("... Getting mapped object %s"), *FObjectPathName(Object) );
 		return (Object && (Object->GetFlags() & (RF_TagExp))) ? SaveData->GetSavedIndex(Object) : 0;
 	}
 };
@@ -576,7 +595,7 @@ public:
 			}
 		}
 		return *this;
-		unguardf(( TEXT("(%s)"), ObjectFullName(Object) ));
+		unguardf(( TEXT("(%s)"), Object->GetFullName() ));
 	}
 };
 
@@ -595,7 +614,7 @@ public:
 
 	virtual FArchive& operator<<( UObject*& Object)
 	{
-		if ( bLog )	debugf( TEXT("... Getting indexed object %s"), ObjectPathName(Object) );
+		if ( bLog )	debugf( TEXT("... Getting indexed object %s"), *FObjectPathName(Object) );
 		int32 Index = SaveData->GetSavedIndex(Object);
 		if ( Index )
 			AddObject( Index );
@@ -608,6 +627,7 @@ public:
 		check( SaveData->Elements.IsValidIndex(Index) );
 		FSaveGameElement& Element = SaveData->Elements(Index);
 		if ( !Element.Object || Element.DataQueued || !Element.Object->IsIn(SaveData->Level->GetOuter())
+			|| Element.Object->IsA(UClass::StaticClass() )
 			|| Element.Object->IsA(UPrimitive::StaticClass() )
 			|| Element.Object->IsA(UBitmap::StaticClass()) ) //May break scripted textures!!
 			return false;
@@ -645,7 +665,7 @@ public:
 			Object->Serialize( *this );
 			ExchangeRaw( Buffer, Element.Data);
 			Buffer.Empty();
-			if ( bLog )	debugf( TEXT("Serialized %i bytes of %s"), Element.Data.Num(), ObjectPathName( Object) );
+			if ( bLog )	debugf( TEXT("Serialized %i bytes of %s"), Element.Data.Num(), Object->GetPathName() );
 
 			if ( Element.IsImport )
 			{
@@ -957,12 +977,12 @@ XC_CORE_API UBOOL LoadGame( ULevel* Level, const TCHAR* FileName)
 			if ( !Element.Object && Class )
 				Element.Object = UObject::StaticLoadObject( Class, nullptr, *PathName, nullptr, LOAD_Quiet, nullptr);
 			if ( !Element.Object )
-				GWarn->Logf( TEXT("LoadGame: failed to load %s (%s) %i"), *PathName, ObjectPathName(Class), Element.ClassIndex );
+				GWarn->Logf( TEXT("LoadGame: failed to load %s (%s) %i"), *PathName, *FObjectPathName(Class), Element.ClassIndex );
 		}
 		else if ( Element.IsImport == 1 )
 		{
 			if ( !Element.Object ) //Failed imports don't count
-				GWarn->Logf( TEXT("LoadGame: failed import %s (%s)"), *PathName, ObjectPathName(Class));
+				GWarn->Logf( TEXT("LoadGame: failed import %s (%s)"), *PathName, *FObjectPathName(Class));
 		}
 		else
 		{
@@ -997,8 +1017,8 @@ XC_CORE_API UBOOL LoadGame( ULevel* Level, const TCHAR* FileName)
 			}
 		}
 
-		if ( appStricmp(*PathName, ObjectPathName(Element.Object)) )
-			debugf( TEXT("Bad object relink: %s to %s (import type %i)"), *PathName, ObjectPathName(Element.Object), (int32)Element.IsImport );
+		if ( appStricmp(*PathName, *FObjectPathName(Element.Object)) )
+			debugf( TEXT("Bad object relink: %s to %s (import type %i)"), *PathName, *FObjectPathName(Element.Object), (int32)Element.IsImport );
 
 		unguard;
 //		debugf( TEXT("Setting up element %s (%s) as %s"), *PathName, ObjectPathName(Class), ObjectPathName(Element.Object) );
@@ -1012,11 +1032,17 @@ XC_CORE_API UBOOL LoadGame( ULevel* Level, const TCHAR* FileName)
 		if ( Element.Object && Element.Data.Num() ) //TODO: CHECK IF IN LEVEL?
 		{
 			guard(Element);
-			if ( !Element.Object->IsA(UField::StaticClass()) )
+			if ( !Element.Object->IsA(UField::StaticClass()) ) //Non-fields should not be serialized (broken script text may actually be serialized!!)
+			{
 				FixStruct( Element.Object->GetClass() );
-//			debugf( TEXT("Loading properties for %s (%i)"), ObjectPathName(Element.Object), Element.Data.Num() );
-			FArchiveGameLoader ArLoader( &SaveFile, &Element.Data);
-			Element.Object->Serialize( ArLoader );
+//				debugf( TEXT("Loading properties for %s (%i)"), ObjectPathName(Element.Object), Element.Data.Num() );
+				Element.Object->ClearFlags( RF_HasStack );
+				Element.Object->SetFlags( Element.ObjectFlags & RF_HasStack );
+				FArchiveGameLoader ArLoader( &SaveFile, &Element.Data);
+				Element.Object->Serialize( ArLoader );
+			}
+			else if ( Element.Object->GetLinker() )
+				Element.Object->GetLinker()->Preload( Element.Object);
 			unguardf( (TEXT("%s"), Element.Object->GetPathName()) );
 		}
 	}

@@ -24,7 +24,7 @@ template <typename E,typename T> FORCEINLINE void ExchangeRawUsing( T& A, T& B)
 {
 	E* pA = (E*)&A;
 	E* pB = (E*)&B;
-	register E Tmp;
+	E Tmp;
 	for ( int i=0 ; i<sizeof(T)/sizeof(E) ; i++ )
 	{
 		Tmp = *pA;

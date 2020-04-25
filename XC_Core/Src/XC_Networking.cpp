@@ -147,8 +147,13 @@ void UXC_Download::Tick()
 	int32 DownloadSize = RealFileSize ? RealFileSize : Info->FileSize;
 	if ( !Finished && (OldTransfered != Transfered) )
 	{
+		int32 FileCount = 0;
+		for ( int32 i=0; i<Connection->PackageMap->List.Num(); i++)
+			if (Connection->PackageMap->List(i).PackageFlags & PKG_Need)
+				FileCount++;
+		
 		FString Msg1 = FString::Printf( (Info->PackageFlags&PKG_ClientOptional)?LocalizeProgress(TEXT("ReceiveOptionalFile"),TEXT("Engine")):LocalizeProgress(TEXT("ReceiveFile"),TEXT("Engine")), Info->Parent->GetName() );
-		FString Msg2 = FString::Printf( LocalizeProgress(TEXT("ReceiveSize"),TEXT("Engine")), DownloadSize/1024, 100.f*Transfered/DownloadSize );
+		FString Msg2 = FString::Printf( LocalizeProgress(TEXT("ReceiveSize"),TEXT("Engine")), DownloadSize/1024, 100.f*Transfered/DownloadSize, Transfered/1024, FileCount-1 );
 		Connection->Driver->Notify->NotifyProgress( *Msg1, *Msg2, 4.f );
 		OldTransfered = Transfered;
 	}

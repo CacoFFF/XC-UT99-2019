@@ -92,24 +92,12 @@ inline FLOAT _appInvSqrt( FLOAT F )
 #endif
 }
 
-
-inline FVector _UnsafeNormal( const FVector& V)
-{
-	const FLOAT Scale = _appInvSqrt(V.X*V.X+V.Y*V.Y+V.Z*V.Z);
-	return FVector( V.X*Scale, V.Y*Scale, V.Z*Scale );
-}
-
 inline FVector _UnsafeNormal2D( const FVector& V)
 {
 	const FLOAT Scale = _appInvSqrt(V.X*V.X+V.Y*V.Y);
 	return FVector( V.X*Scale, V.Y*Scale, 0.f);
 }
 
-inline FVector _UnsafeNormal2D( const FLOAT& X, const FLOAT& Y)
-{
-	const FLOAT Scale = _appInvSqrt(X*X+Y*Y);
-	return FVector( X*Scale, Y*Scale, 0.f);
-}
 
 
 ///////////////////////////////////////////////////////////////////////

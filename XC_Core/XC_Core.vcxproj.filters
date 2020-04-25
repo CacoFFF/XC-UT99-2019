@@ -86,9 +86,6 @@
     <ClInclude Include="Inc\UnXC_Script.h">
       <Filter>Inc</Filter>
     </ClInclude>
-    <ClInclude Include="Inc\CTickerEngine.h">
-      <Filter>Inc</Filter>
-    </ClInclude>
     <ClInclude Include="Inc\FPathBuilderMaster.h">
       <Filter>Inc</Filter>
     </ClInclude>

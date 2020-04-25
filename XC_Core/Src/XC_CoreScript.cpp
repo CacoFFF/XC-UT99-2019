@@ -126,7 +126,6 @@ INT DummyFixNames()
 // Helps keeping the engine clean when playing
 // on protected GNatives environments
 //*************************************************
-#pragma DISABLE_OPTIMIZATION
 XC_CORE_API void XCCNatives( UBOOL bEnable)
 {
 	if ( bEnable )
@@ -176,7 +175,6 @@ XC_CORE_API void XCCNatives( UBOOL bEnable)
 		GNatives[3572] = (Native)&UObject::execUndefined;
 	}
 }
-#pragma ENABLE_OPTIMIZATION
 
 
 //Function aliasing
@@ -224,14 +222,14 @@ void UXC_CoreStatics::execInvSqrt( FFrame &Stack, RESULT_DECL)
 {
 	P_GET_FLOAT( C);
 	P_FINISH;
-	*(FLOAT*)Result = _appInvSqrt( C);
+	*(FLOAT*)Result = appFastInvSqrt(C);
 }
 
 void UXC_CoreStatics::execHSize( FFrame &Stack, RESULT_DECL)
 {
 	P_GET_VECTOR( A);
 	P_FINISH;
-	*(FLOAT*)Result = appSqrt( A.X*A.X+A.Y*A.Y);
+	*(FLOAT*)Result = A.Size2D();
 }
 IMPLEMENT_RENAMED_FUNCTION(UXC_CoreStatics,-1,execHSize,exechsize);
 IMPLEMENT_RENAMED_FUNCTION(UXC_CoreStatics,-1,execHSize,exechSize);

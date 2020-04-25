@@ -21,7 +21,6 @@ XC_CORE_API void SortStringsSA( FString* List, INT ArrayMax);
 XC_CORE_API FString PathsRebuild( class ULevel* Level, class APawn* ScoutReference, UBOOL bBuildAir);
 
 XC_CORE_API FPackageFileSummary LoadPackageSummary( const TCHAR* File);
-XC_CORE_API UBOOL FindPackageFile( const TCHAR* In, const FGuid* Guid, TCHAR* Out );
 
 
 //Linux doesn't have a working editor

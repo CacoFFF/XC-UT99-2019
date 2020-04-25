@@ -14,7 +14,6 @@ class XC_CORE_API UXC_Download : public UDownload
 	UBOOL EnableLZMA;
 
 	BYTE IsLZMA;
-	BYTE IsInvalid; //Remove from download list ASAP
 
 	int32 OldTransfered;
 	volatile int32 AsyncAction; //Worker thread in progress

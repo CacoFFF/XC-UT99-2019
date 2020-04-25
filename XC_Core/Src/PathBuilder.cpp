@@ -27,6 +27,8 @@
 #define MAX_DISTANCE 1000
 #define MAX_WEIGHT 10000000
 
+#define CHECK_SCOUT_HASH {if ( Scout->GetLevel()->Hash && (Scout->Location != Scout->ColLocation) ) appThrowf( TEXT("SCOUT HASH %i"), __LINE__ );}
+
 enum EReachSpecFlags
 {
 	R_WALK = 1,	//walking required
@@ -233,7 +235,7 @@ FString PathsRebuild( ULevel* Level, APawn* ScoutReference, UBOOL bBuildAir)
 
 //============== FPathBuilderMaster main funcs
 //
-inline FPathBuilderMaster::FPathBuilderMaster()
+FPathBuilderMaster::FPathBuilderMaster()
 {
 	appMemzero( this, sizeof(*this));
 }
@@ -282,6 +284,8 @@ static TArray<int> FreeReachSpecs;
 //
 void FPathBuilderMaster::AutoDefine( ANavigationPoint* NewPoint, AActor* AdjustTo)
 {
+	guard(FPathBuilderMaster::AutoDefine);
+
 	if ( NewPoint->IsA( ALiftCenter::StaticClass()) )
 	{
 		debugf( NAME_DevPath, TEXT("Cannot auto define paths for %s (LiftCenter subtype)"), NewPoint->GetName());
@@ -291,8 +295,12 @@ void FPathBuilderMaster::AutoDefine( ANavigationPoint* NewPoint, AActor* AdjustT
 	// Setup environment
 	SafeEmpty( FreeReachSpecs);
 	Level = NewPoint->GetLevel();
-	if ( !Scout ) //Create scout on demand
+	if ( !Scout || Scout->bDeleteMe ) //Create scout on demand
+	{
 		GetScout();
+		Scout->bNoDelete = true; //Hack
+		CHECK_SCOUT_HASH
+	}
 	if ( AdjustTo )
 		AdjustToActor( NewPoint, AdjustTo);
 
@@ -321,8 +329,13 @@ void FPathBuilderMaster::AutoDefine( ANavigationPoint* NewPoint, AActor* AdjustT
 	// Cleanup
 	Mark.Pop();
 	if ( Scout )
+	{
+		Scout->bNoDelete = false;
 		Level->DestroyActor( Scout);
+	}
 	SafeEmpty( FreeReachSpecs);
+
+	unguard;
 }
 
 
@@ -792,11 +805,13 @@ inline FReachSpec FPathBuilderMaster::CreateSpec( ANavigationPoint* Start, ANavi
 	if ( (Fat.SizeSquared2D() <= Square(129.0)) && Square(Fat.Z) < Square(60) )
 	{
 		Scout->SetCollisionSize( Fat.Size2D() + 5, GoodHeight + Abs(Fat.Z) * 0.5);
+		CHECK_SCOUT_HASH;
 		if ( FindStart(Start->Location + Fat * 0.5) && ActorsTouching(Scout,End) && ActorsTouching(Scout,Start) )
 		{
 			Spec.CollisionRadius = Max( Spec.CollisionRadius, appRound(Scout->CollisionRadius) + 2);
 			Spec.CollisionHeight = Max( Spec.CollisionHeight, appRound(Scout->CollisionHeight) + 2);
 			Scout->SetCollisionSize( GoodRadius, GoodHeight);
+			CHECK_SCOUT_HASH;
 			int Walkables = FindStart(Start->Location) + FindStart(End->Location);
 			if ( Walkables >= 2 )
 			{
@@ -824,8 +839,10 @@ inline FReachSpec FPathBuilderMaster::CreateSpec( ANavigationPoint* Start, ANavi
 		if ( !Reachable ) //Try a FerBotz jump
 		{
 			Scout->SetCollisionSize( GoodRadius, GoodHeight);
+			CHECK_SCOUT_HASH;
 			if ( Scout->GetLevel()->FarMoveActor( Scout, Start->Location) )
 			{
+				CHECK_SCOUT_HASH;
 				Reachable = JumpTo( Scout, End);
 				if ( Reachable )
 				{//Manually set flags
@@ -840,6 +857,7 @@ inline FReachSpec FPathBuilderMaster::CreateSpec( ANavigationPoint* Start, ANavi
 					
 			}
 		}
+		CHECK_SCOUT_HASH;
 		Spec.reachFlags |= Reachable;
 	}
 
@@ -960,7 +978,9 @@ static int FlyTo( APawn* Scout, AActor* Other, UBOOL bVisible=0)
 		FVector Moved = Scout->Location;
 		FVector Offset( 0, 0, Scout->MaxStepHeight * ((Loops&1) ? 1.0 : -1.0 ) );
 		Scout->moveSmooth( Offset);
+		CHECK_SCOUT_HASH;
 		Scout->moveSmooth( EndPos - Scout->Location);
+		CHECK_SCOUT_HASH;
 		FVector Delta = EndPos - Scout->Location;
 		//Adjust Scout to Mover
 		if ( Other->Brush )
@@ -1075,6 +1095,7 @@ static int JumpTo( APawn* Scout, AActor* Other)
 				NextLoc.Z = Scout->Location.Z + Scout->Velocity.Z * STEP_ALPHA + Gravity * 0.5 * (STEP_ALPHA * STEP_ALPHA); //MRUA
 				FVector OldPos = Scout->Location;
 				Scout->flyMove( NextLoc - Scout->Location, Other);
+				CHECK_SCOUT_HASH;
 				//Simulate press forward a bit
 				Offset = Other->Location - Scout->Location;
 				Scout->Velocity.X *= 0.6;
@@ -1102,6 +1123,7 @@ static int JumpTo( APawn* Scout, AActor* Other)
 //					debugf( NAME_DevNet, L"TEST REACH");
 				Scout->Physics = Scout->Region.Zone->bWaterZone ? PHYS_Swimming : PHYS_Walking;
 				Reached = Scout->pointReachable( Other->Location);
+				CHECK_SCOUT_HASH;
 				if ( Reached )
 					Reached |= R_WALK | R_JUMP | (R_SWIM * Scout->Region.Zone->bWaterZone);
 //				if ( HVel < Scout->GroundSpeed && !Reached )
@@ -1151,6 +1173,7 @@ static int TraverseTo( APawn* Scout, AActor* To, float MaxDistance, int Visible)
 	{
 		if ( To->GetLevel()->FarMoveActor( Scout, Results->Owner->Location) && FlyTo(Scout,To,Visible) )
 			Found = 1;
+		CHECK_SCOUT_HASH;
 	}
 	Mark.Pop();
 	return Found;
@@ -1167,6 +1190,7 @@ inline void FPathBuilderMaster::HandleInventory( AInventory* Inv)
 
 	//Adjust Scout using player dims
 	Scout->SetCollisionSize( GoodRadius, GoodHeight);
+	CHECK_SCOUT_HASH;
 
 	//Attempt to stand at item
 	if ( !FindStart(Inv->Location) 
@@ -1202,6 +1226,7 @@ inline void FPathBuilderMaster::HandleWarpZone( AWarpZoneInfo* Info)
 	guard(FPathBuilderMaster::HandleWarpZone)
 	//Adjust Scout using player dims
 	Scout->SetCollisionSize( GoodRadius, GoodHeight);
+	CHECK_SCOUT_HASH;
 	if ( !FindStart(Info->Location) || (Scout->Region.Zone != Info) )
 	{
 		//Failed, attempte to traverse from nearest pathnode
@@ -1211,6 +1236,7 @@ inline void FPathBuilderMaster::HandleWarpZone( AWarpZoneInfo* Info)
 			Level->FarMoveActor( Scout, Info->Location, 1, 1);
 		}
 	}
+	CHECK_SCOUT_HASH;
 
 	AWarpZoneMarker *Marker = (AWarpZoneMarker*)Level->SpawnActor( WarpZoneMarkerClass, NAME_None, NULL, NULL, Scout->Location);
 	Marker->markedWarpZone = Info;
@@ -1223,6 +1249,7 @@ inline void FPathBuilderMaster::HandleWarpZone( AWarpZoneInfo* Info)
 //
 void FPathBuilderMaster::AdjustToActor( ANavigationPoint* N, AActor* Actor)
 {
+	guard(FPathBuilderMaster::AdjustToActor);
 	if ( !N || !Actor )
 		return;
 
@@ -1238,7 +1265,9 @@ void FPathBuilderMaster::AdjustToActor( ANavigationPoint* N, AActor* Actor)
 		Level->FarMoveActor( N, Scout->Location);
 	else
 		Level->FarMoveActor( N, Actor->Location);
+	CHECK_SCOUT_HASH;
 	N->bCollideWorld = bOldCollideWorld;
+	unguard;
 }
 
 //============== FPathBuilder forwards
@@ -1250,10 +1279,15 @@ inline void FPathBuilderMaster::GetScout()
 
 	Scout->GroundSpeed = GoodGroundSpeed;
 	Scout->JumpZ = GoodJumpZ;
+	CHECK_SCOUT_HASH;
 	Scout->SetCollisionSize( GoodRadius, GoodHeight);
+	CHECK_SCOUT_HASH;
 }
 
 inline int FPathBuilderMaster::FindStart( FVector V)
 {
-	return FPathBuilder::findScoutStart(V); 
+	CHECK_SCOUT_HASH;
+	int32 Result = FPathBuilder::findScoutStart(V); 
+	CHECK_SCOUT_HASH;
+	return Result;
 }
