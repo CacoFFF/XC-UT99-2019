@@ -5,13 +5,14 @@
 #include <emmintrin.h>
 #include <math.h>
 
+#if __UNREAL_X86__ && !USES_SSE_INTRINSICS
+	#include "UnMath_SSE.inl"
+#endif
 
 enum EZero    { E_Zero=0 };
 enum EStrict  { E_Strict=0 };
 enum EInit    { E_Init=0 };
 enum ENoZero  { E_NoZero=0 };
-enum EStatic3D{ E_Static3D=0 };
-enum ENoSSEFPU{ E_NoSSEFPU=0 };
 enum EUnsafe  { E_Unsafe=0 };
 
 #define GRIDMATH
@@ -59,9 +60,6 @@ inline __m128 _size_xy_zw( __m128 v)
 	return _mm_add_ss( vv, uu); //xx+yy, yy, zz, ww
 }
 
-#define _mm_pshufd_ps(v,i) _mm_castsi128_ps( _mm_shuffle_epi32( _mm_castps_si128(v), i))
-
-
 
 
 
@@ -97,15 +95,20 @@ struct DE Integers
 		return _mm_loadu_ps( (float*)&i);
 	}
 
+	inline operator __m128i() const
+	{
+		return _mm_loadu_si128( (const __m128i*)&i);
+	}
+
 	//**************************
 	//Basic comparison operators
-	bool operator ==(const Integers& I)
+	bool operator==(const Integers& I)
 	{
-		__m128i a, b;
-		a = _mm_loadu_si128(mm());
-		b = _mm_loadu_si128(I.mm());
-		__m128i c = _mm_cmpeq_epi32( a, b);
-		return _mm_movemask_ps( *(__m128*)&c ) == 0b1111;
+		return (_mm_movemask_ps( _mm_castsi128_ps(_mm_cmpeq_epi32( *this, I))) & 0b0111) == 0b0111;
+	}
+	bool operator!=(const Integers& I) 
+	{
+		return (_mm_movemask_ps( _mm_castsi128_ps(_mm_cmpeq_epi32( *this, I))) & 0b0111) != 0b0111;
 	}
 
 
@@ -136,6 +139,8 @@ struct DE Integers
 //
 struct DE Vector
 {
+	typedef __m128 reg_type;
+
 	float X, Y, Z, W;
 
 	Vector() 
@@ -144,6 +149,11 @@ struct DE Vector
 	Vector( float iX, float iY, float iZ, float iW = 0)
 		: X(iX) , Y(iY) , Z(iZ) , W(iW)
 	{}
+
+	Vector( float U)
+	{
+		_mm_storeu_ps( &X, _mm_load_ps1(&U));
+	}
 
 	Vector( const float* f)
 	{
@@ -159,10 +169,6 @@ struct DE Vector
 	{
 		_mm_storeu_ps( &X, _mm_and_ps(_mm_loadu_ps((float*)&V), MASK_3D));
 	}
-
-	Vector( float U, EStatic3D)
-		: X(U) , Y(U) , Z(U) , W(0)
-	{}
 
 	Vector( EZero )
 	{
@@ -194,22 +200,19 @@ struct DE Vector
 
 	//*********************
 	//Basic arithmetic and logic operators
-	Vector operator+( const Vector& V) const	{	return _mm_add_ps( *this, V );	}
-	Vector operator-( const Vector& V) const	{	return _mm_sub_ps( *this, V );	}
-	Vector operator*( const Vector& V) const	{	return _mm_mul_ps( *this, V );	}
-	Vector operator/( const Vector& V) const	{	return _mm_div_ps( *this, V );	}
+	Vector operator+( const Vector& V) const		{ return _mm_add_ps( *this, V ); }
+	Vector operator-( const Vector& V) const		{ return _mm_sub_ps( *this, V ); }
+	Vector operator*( const Vector& V) const		{ return _mm_mul_ps( *this, V ); }
+	Vector operator/( const Vector& V) const		{ return _mm_div_ps( *this, V ); }
+
+	friend reg_type operator*( reg_type reg, const Vector& V)		{ return _mm_mul_ps( reg, V); }
+	friend reg_type operator-=( reg_type& reg, const Vector& V)		{ return reg = _mm_sub_ps( reg, V); }
 
 	float operator|(const Vector& V) const //DOT4
 	{
-/*		__m128 _V = _mm_mul_ps(_mm_loadu_ps(fa()), _mm_loadu_ps(V.fa()));
-		__m128 x = _mm_castsi128_ps( _mm_shuffle_epi32( _mm_castps_si128(_V), 0b11110101)); //Force a PSHUFD (y,y,w,w)
-		x = _mm_add_ps( x, _V); //x+y,...,z+w,...
-		_V = _mm_movehl_ps( _V, x); //z+w,........
-		_V = _mm_add_ss( _V, x);
-		float ReturnValue;
-		_mm_store_ss( &ReturnValue, _V);
-		return ReturnValue;*/
-		return X*V.X + Y*V.Y + Z*V.Z;
+		float Result;
+		_mm_store_ss( &Result, _mm_coords_sum_ps(*this * V));
+		return Result;
 	}
 
 	Vector operator*(const float F) const
@@ -256,11 +259,12 @@ struct DE Vector
 	//**************************
 	//Basic comparison operators
 	bool operator<(const Vector& V) const
-	{	return _mm_movemask_ps( *this << V ) == 0b1111;	}
+	{	return _mm_movemask_ps(_mm_cmple_ps( *this, V) ) == 0b1111;	}
 
 	bool operator<=(const Vector& V) const
 	{	return _mm_movemask_ps(_mm_cmple_ps( *this, V) ) == 0b1111;	}
 
+	//GET RID OF THIS
 	Vector operator<<(const Vector& V) const //Bitmask of coordinates where A < B
 	{
 		return _mm_cmplt_ps( *this, V);
@@ -283,70 +287,31 @@ struct DE Vector
 	//IMPORTANT: SEE IF SSE ORDERED (THAT CHECKS FOR NAN'S) WORKS WITH INFINITY
 
 
-	//Compute >= in parallel, store in integers
-	Integers GreaterThanZeroPS()
-	{
-		__m128i cmp = _mm_castps_si128( _mm_cmpge_ps( *this , _mm_setzero_ps() ) );
-		cmp = _mm_srli_epi32( cmp, 31);
-		return cmp;
-	}
-
 	//**************************
 	//Geometrics
 
-	//Cylinder check against Radius, Height
-	bool InCylinder(float Radius, float Height) const //VS2015 generates an unnecessary MOVAPS instruction!
-	{
-		__m128 v = _size_xy_zw( *this ); //XX+YY,YY,ZZ,WW
-		__m128 h = _mm_load_ss(&Height); //H,0,0,0
-		__m128 r = _mm_load_ss(&Radius); //R,0,0,0
-		r = _mm_movelh_ps( r, h); //R,0,H,0
-		r = _mm_mul_ps( r, r); //RR,0,HH,0
-		v = _mm_cmple_ps( v, r); //C,C,C,C comparison result (C=0 if greater, C=-1 if less or equal)
-		return (_mm_movemask_ps(v) & 0b0101) == 0b0101; //See that Horiz,Vert are less than Radius,Height
-	}
-
-	//Cylinder check against Radius (infinite height)
-	bool InCylinder( float Radius) const
-	{
-		return X*X+Y*Y < Radius*Radius;
-	}
-
-	//Cylinder check against unreal Extent vector
-	bool InCylinder( const Vector& Extent) const //FIX THIS
-	{
-		__m128 v = _size_xy_zw( *this ); //XX+YY,YY,ZZ,WW
-		__m128 r = Extent; //R,R,H,0
-		r = _mm_mul_ps( r, r); //RR,RR,HH,0
-		v = _mm_cmple_ps( v, r); //C,C,C,C comparison result (C=0 if greater, C=-1 if less or equal)
-		return (_mm_movemask_ps(v) & 0b0101) == 0b0101; //See that X,Y,Z are all less or equal
-	}
-
 	float SizeSq() const
 	{
-/*		__m128 v = _mm_loadu_ps( fa() );
-		v = _mm_mul_ps( v, v);
-		__m128 w = _mm_pshufd_ps( v, 0b10110001); //Y,X,W,Z
-		w = _mm_add_ps( w, w); //Y+X, ..., Z+W, ...
-		v = _mm_movehl_ps( v, w);
-		v = _mm_add_ss( v, w);
-		return v.m128_f32[0];*/
-		return X*X+Y*Y+Z*Z;
-	}
-
-	float SizeXYSq() const
-	{
-		float size;
-		__m128 v = *this;
-		v = _mm_mul_ps( v, v);
-		__m128 w = _mm_pshufd_ps( v, 0b10110001); //Y,X,W,Z
-		w = _mm_add_ss( v, w);
-		_mm_store_ss( &size, w);
-		return size;
+		float Result;
+		_mm_store_ss( &Result, _mm_coords_sum_ps(*this * *this));
+		return Result;
 	}
 
 	uint32 SignBits() //Get sign bits of every component
 	{	return _mm_movemask_ps( *this );	}
+
+	// Return components with -1, 0, 1
+	Vector SignFloatsNoZero()
+	{
+		__m128 mm_this = *this;
+		__m128 mm_gcmp = _mm_cmpge_ps( mm_this, _mm_setzero_ps()); //bits to 1 if greater-or-equal
+		__m128 mm_lcmp = _mm_cmplt_ps( mm_this, _mm_setzero_ps()); //bits to 1 if lesser (TODO: EVALUATE IF INVERT IS CHEAPER)
+		return _mm_or_ps
+		(
+			_mm_and_ps( mm_gcmp, _mm_set_ps( 1, 1, 1,0)),
+			_mm_and_ps( mm_lcmp, _mm_set_ps(-1,-1,-1,0))
+		);
+	}
 
 	//**************************
 	//Transformations
@@ -383,23 +348,6 @@ struct DE Vector
 //		return *this * (1.f/sqrtf(X*X+Y*Y+Z*Z));
 	}
 
-	//Return a normal on 2 components
-	Vector NormalXY() const
-	{
-		__m128 a = *this;
-		__m128 z = _mm_setzero_ps();
-		a = _mm_movelh_ps( a, z); //x,y,0,0
-		__m128 b = _mm_mul_ps( a, a); //xx,yy,0,0
-		z = _mm_pshufd_ps(b,0b11100001); //yy,xx,0,0
-		b = _mm_add_ss( b, z); //c=xx+yy
-		b = _newton_raphson_rsqrtss( b); //1/sqrt(c)
-										 //Need conditional to prevent this from jumping to infinite
-		b = _mm_shuffle_ps( b, b, 0b00000000); //Populate YZW with X
-		a = _mm_mul_ps( a, b); //Normalized vector
-		return a;
-		//		return *this * (1.f/sqrtf(X*X+Y*Y+Z*Z));
-	}
-
 	//Fast 1/x computation
 	Vector Reciprocal()
 	{
@@ -410,41 +358,21 @@ struct DE Vector
 		return _V; //~= 1/x to 0.000012%
 	}
 
-	//Transform by a normalized XY dir vector
-	Vector TransformByXY( const Vector& Dir) const
-	{
-		__m128 org = *this;
-		__m128 dir = Dir;
-		__m128 y = Vector(1,1,-1,1);
-
-		//result.x = org DOT dir
-		//result.y = org DOT rotated_dir
-		//result.z = result.z
-
-		//Dir: X,Y
-		//Rotated dir: -Y, X
-		dir = _mm_pshufd_ps( dir, 0b00010100); //Force a PSHUFD (x,y,y,x)
-		dir = _mm_mul_ps( dir, y); //x,y,-y,x
-
-		__m128 opvec = _mm_movelh_ps( org, org); //Get X,Y,X,Y here
-		opvec = _mm_mul_ps( opvec, dir); // ox*dx, oy*dy, ox*-dy, oy*dx
-		opvec = _mm_castsi128_ps( _mm_shuffle_epi32( _mm_castps_si128(opvec), 0b11011000)); //Force another PSHUFD (x,z,y,w)
-		y = _mm_movehl_ps( y, opvec);
-		opvec = _mm_add_ps( opvec, y); //ox*dx+oy*dy, ox*-dy+oy*dx
-		opvec = _mm_shuffle_ps( opvec, org, 0b11100100); //Mix X,Y of OPVEc and Z,W of ORG
-
-		return opvec;
-	}
-
 	static const Integers MASK_3D;
 	static const Integers MASK_SIGN;
 	static const Integers MASK_ABS;
 };
 //**************
+}; //NAMESPACE END
 
-inline Vector Min( const Vector& A, const Vector& B)	{	return _mm_min_ps( A, B );	}
-inline Vector Max( const Vector& A, const Vector& B)	{	return _mm_max_ps( A, B );	}
-inline Vector Clamp( const Vector& V, const Vector& Min, const Vector& Max)		{	return _mm_min_ps( _mm_max_ps( V, Min), Max);	}
+inline cg::Vector Min( const cg::Vector& A, const cg::Vector& B)	{	return _mm_min_ps( A, B );	}
+inline cg::Vector Max( const cg::Vector& A, const cg::Vector& B)	{	return _mm_max_ps( A, B );	}
+inline cg::Vector Clamp( const cg::Vector& V, const cg::Vector& Min, const cg::Vector& Max)		{	return _mm_min_ps( _mm_max_ps( V, Min), Max);	}
+
+
+// NAMESPACE BEGIN
+namespace cg
+{
 
 inline Vector Vectorize( const Integers& i)
 {
@@ -479,8 +407,8 @@ struct DE Box
 
 	//Non-strict constructor: used when Min, Max have to be deducted
 	Box( const Vector& A, const Vector& B)
-		:	Min( cg::Min(A,B))
-		,	Max( cg::Max(A,B))
+		:	Min( ::Min(A,B))
+		,	Max( ::Max(A,B))
 	{}
 
 	//Strict constructor: used when Min, Max are obvious
@@ -533,10 +461,6 @@ struct DE Box
 		_mm_storeu_ps( *Max, ma);
 	}
 
-	//Give us one of the component vectors
-	Vector& Vec( uint32 i)
-	{	return (&Min)[i];	}
-
 	//********************************
 	//Basic assignment logic operators
 
@@ -567,29 +491,18 @@ struct DE Box
 	//***********************
 	//Characteristics queries
 
-	bool IsZero() const
+	bool Intersects3( const Box& Other) const
 	{
-		__m128 cmin, cmax;
-		__m128 m = _mm_setzero_ps();
-		cmin = _mm_cmpeq_ps( m, Min );
-		cmax = _mm_cmpeq_ps( m, Max );
-		m = _mm_cmpeq_ps( cmin, cmax );
-		return _mm_movemask_ps( m) == 0b1111;
+		return (_mm_movemask_ps(_mm_cmple_ps( Min, Other.Max))
+			& _mm_movemask_ps(_mm_cmple_ps( Other.Min, Max))
+			& 0b0111) == 0b0111;
 	}
 
-	Vector CenterPoint() const
+	bool Contains3( const Vector& Other) const
 	{
-		return (Min + Max) * 0.5;
-	}
-
-	bool Intersects( const Box& Other) const
-	{
-		return (Min <= Other.Max) & (Other.Min <= Max);
-	}
-
-	bool Contains( const Vector& Other) const
-	{
-		return (Min <= Other) & (Other <= Max);
+		return (_mm_movemask_ps(_mm_cmple_ps( Min, Other))
+			& _mm_movemask_ps(_mm_cmple_ps( Other, Max))
+			& 0b0111) == 0b0111;
 	}
 
 	//**************************
@@ -597,30 +510,15 @@ struct DE Box
 
 	Box Expand( const Vector& Towards)
 	{
-		Min = cg::Min( Min, Towards);
-		Max = cg::Max( Max, Towards);
+		Min = ::Min( Min, Towards);
+		Max = ::Max( Max, Towards);
 		return *this;
 	}
 
 	Box Expand( const Box& By)
 	{
-		Min = cg::Min( Min, By.Min);
-		Max = cg::Max( Max, By.Max);
-		return *this;
-	}
-
-	Box Expand( const Box& By, ENoZero)
-	{
-		if ( !By.IsZero() )
-		{
-			if ( IsZero() )
-				(*this = By);
-			else
-			{
-				Min = cg::Min( Min, By.Min);
-				Max = cg::Max( Max, By.Max);
-			}
-		}
+		Min = ::Min( Min, By.Min);
+		Max = ::Max( Max, By.Max);
 		return *this;
 	}
 
@@ -631,6 +529,10 @@ struct DE Box
 		Max += By;
 	}
 
+	const cg::Vector& GetExtrema( int i) const
+	{
+		return (&Min)[i];
+	}
 };
 
 } //Namespace cg - end

@@ -47,5 +47,11 @@
     <ClInclude Include="GridMem.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="CollisionGrid.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="GridQueries.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

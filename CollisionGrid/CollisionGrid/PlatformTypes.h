@@ -35,10 +35,8 @@ typedef signed long long	int64;		// 64-bit signed.
 #endif
 
 #if _WINDOWS
-	#define GCC_STACK_ALIGN
 	#define TEST_EXPORT DLL_EXPORT
 #else
-	#define GCC_STACK_ALIGN __attribute__((force_align_arg_pointer))
 	#define DLLIMPORT	__attribute__ ((visibility ("default")))
 	#define TEST_EXPORT	extern "C" __attribute__ ((visibility ("default"))) 
 #endif

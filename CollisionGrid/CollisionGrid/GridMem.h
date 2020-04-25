@@ -9,202 +9,173 @@
 
 #pragma once
 
-#include "GridTypes.h"
+//
+// Element holder behaviour flags.
+//
+enum EElementHolderFlags
+{
+	EHF_ZeroInit           = 0x01, // Memzero the element array upon creation (useful for elements without constructors)
+	EHF_DestroyOnRelease   = 0x02, // Call destructor upon element release
+	EHF_ZeroOnRelease      = 0x04, // Zero memory upon element release
+};
 
-
-extern class ActorInfoHolder* G_AIH;
-extern class MiniTreeHolder* G_MTH;
-
-class GSBaseMarker
+//
+// Element holder base class type
+// Make all holdable elements subclass of this for correct functionality.
+//
+class FHoldableElement
 {
 public:
-	GSBaseMarker();
-	~GSBaseMarker();
+	constexpr bool CanAcquire() const
+	{
+		return true;
+	}
+	constexpr bool CanRelease() const
+	{
+		return true;
+	}
+	constexpr void SetAcquired( bool bNewAcquired)
+	{
+	}
 };
 
-enum EHolderFlags
-{
-	HF_Construct = 0x01,
-	HF_Destruct = 0x02,
-	HF_ZeroInit = 0x04,
-	HF_ZeroExit = 0x08
-};
 
-//*************************************************
 //
 // Element holder
 // Holds a bunch of contiguous objects without required allocation/deallocation
 //
-//*************************************************
-template<typename T,int kb,int hflags=0> class ElementHolder
+template<typename T,uint32 ElementCount,uint32 HolderFlags=0> class TElementHolder
 {
-	//Ideally keep data in 4kb*n size blocks, amount of blocks is reasonably deducted here
-	//Why substract 32 bytes? _freecount=4, _next=4
-	#define HOLDER_COUNT ((1024*kb-8)/(sizeof(uint32)+sizeof(T)))
+protected:
+	typedef TElementHolder<T,ElementCount,HolderFlags> THolder;
 
-	ElementHolder<T,kb,hflags>* _next;
-	int32                _freecount;
-	T                    _holder[HOLDER_COUNT];
-	int32                _free[HOLDER_COUNT];
+private:
+	THolder* Next;
+	uint32   FreeCount;
+	uint32   Available[ElementCount];
+	T        Elements[ElementCount];
 
 public:
-	//Constructor
-	ElementHolder()
-		:	_next(nullptr)
-		,	_freecount(HOLDER_COUNT)
+		//Constructor
+	TElementHolder()
+	:	Next(nullptr)
+	,	FreeCount(ElementCount)
 	{
-		for ( uint32 i=0; i<HOLDER_COUNT; i++)
-			_free[i] = i;
-		if ( hflags & HF_ZeroInit )
-			memset( _holder, 0, sizeof(_holder) );
-		UE_DEV_LOG( TEXT("[CG] Allocated element holder for %s with %i entries at %i"), T::Name(), _freecount, this);
+		uint32 j = ElementCount;
+		for ( uint32 i=0; i<ElementCount; i++)
+			Available[i] = --j;
+		check(j==0);
+
+		if ( HolderFlags & EHF_ZeroInit )
+			appMemzero( &Elements, sizeof(Elements) );
+
+		debugf( TEXT("[CG] Allocated element holder for %s with %i entries"), T::Name(), FreeCount);
 	}
 
-	//Destructor
-	~ElementHolder()
+	//Destructs whole chain of holders without recursing
+	~TElementHolder()
 	{
-		if ( hflags & HF_Destruct )
+		if ( Next ) // I am main holder
 		{
-			GLog->Log( TEXT("Destructing holder"));
-			for ( uint32 i=0 ; i<HOLDER_COUNT ; i++ )
-				_holder[i].~T();
-		}
-		if ( hflags & HF_ZeroExit )
-			memset( _holder, 0, sizeof(_holder) );
-	}
-
-	//Destructs whole chain of holders
-	void Exit()
-	{
-		ElementHolder<T,kb,hflags> *C, *N;
-		for ( C=this ; C ; C=N )
-		{
-			N = C->_next;
-			delete C;
+			THolder *C, *N;
+			for ( C=this ; C ; C=N )
+			{
+				N = C->Next;
+				C->Next = nullptr;
+				delete C;
+			}
 		}
 	}
 
-	//Gets index of an element by pointer
-	int32 GetIndex(T* N)
+	//Get index of an element by pointer (local)
+	int32 GetLocalIndex( const T* LocalElement )
 	{
-		if ( N < _holder || N >= (&_holder[HOLDER_COUNT]))
-			return -1;
-		return ((uint32)N - (uint32)_holder) / sizeof(T);
+		if ( (LocalElement < &Elements[0]) || (LocalElement >= &Elements[ElementCount]) )
+			return INDEX_NONE;
+		return (int32) (((PTRINT)LocalElement - (PTRINT)Elements) / sizeof(Elements[0]));
 	}
 
-	//Verifies that is contained by ANY of the chained holders (can release the object as well)
-	bool IsValid( T* N)
+	//Get index of an element by pointer (global)
+	int32 GetGlobalIndex( const T* Element )
 	{
-		uint32 HolderMemSize = HOLDER_COUNT * sizeof(T);
-		uint32 ElemAddr = (uint32)N;
-		for ( ElementHolder<T,kb,hflags>* Link=this ; Link ; Link=Link->_next )
+		int32 Skipped = 0;
+		for ( THolder* Link=this ; Link ; Link=Link->Next )
 		{
-			uint32 StartAddr = (uint32)Link->_holder;
-			if ( ElemAddr >= StartAddr && ElemAddr < StartAddr+HolderMemSize )
-				return true;
+			int32 LocalIndex = Link->GetLocalIndex(Element);
+			if ( LocalIndex < ElementCount )
+				return Skipped + LocalIndex;
+			Skipped += ElementCount;
 		}
-		PlainText Error = PlainText(TEXT("[CG ]IsValid cannot validate element ")) + T::Name() + TEXT(" ") + ElemAddr + TEXT(" (H=") + HolderMemSize + TEXT(") against:");
-		for ( ElementHolder<T,kb,hflags>* Link=this ; Link ; Link=Link->_next )
+		return INDEX_NONE;
+	}
+
+	//Get an element using global index
+	T* GetIndexedElement( int32 GlobalIndex)
+	{
+		if ( GlobalIndex >= 0 )
 		{
-			uint32 StartAddr = (uint32)Link->_holder;
-			Error = Error + TEXT(" [") + StartAddr + TEXT("-") + (StartAddr+HolderMemSize) + TEXT("]");
+			for ( THolder* Link=this ; Link ; Link=Link->Next )
+			{
+				if ( GlobalIndex < ElementCount )
+					return &Elements[GlobalIndex];
+				GlobalIndex -= ElementCount;
+			}
 		}
-		GLog->Log( *Error);
-//		appFailAssert( Error.Ansi() );
-		return false;
+		return nullptr;
 	}
 
 	//Picks up a new element, will create new holder if no new elements
-	T* GrabElement()
+	T* Acquire( int32& GlobalIndex)
 	{
-		guard_slow(#T#::GrabElement);
-		int i = 0;
-		for ( ElementHolder<T,kb,hflags>* Link=this ; Link ; Link=Link->_next )
+		guard(#T#::Acquire); //Slow
+		GlobalIndex = 0;
+		for ( THolder* Link=this ; Link ; Link=Link->Next, GlobalIndex+=ElementCount )
 		{
-			i++;
-			if ( Link->_freecount > 0 )
+			if ( Link->FreeCount > 0 )
 			{
-				Link->_freecount--;
-				int32 free = Link->_free[Link->_freecount];
-				T* Result = &Link->_holder[ free];
-				if ( hflags & HF_Construct )
-					Result = new ( Result, E_Stack) T();
-				return Result; //Index never mismatches, code is good
+				int32 FreeLocal = Link->Available[ --Link->FreeCount ];
+				T& Element = Link->Elements[FreeLocal];
+				GlobalIndex += FreeLocal;
+				check(Element.CanAcquire());
+				Element.SetAcquired(true);
+				return &Element;
 			}
-			else if ( !Link->_next )
+			else if ( !Link->Next )
 			{
-				UE_DEV_LOG( TEXT("[CG] Allocating extra element holder for %s"), T::Name() );
-				Link->_next = new ElementHolder<T,kb,hflags>();
-				UE_DEV_THROW( !Link->_next, "Unable to allocate new element holder");
+				debugf( TEXT("[CG] Allocating extra element holder for %s"), T::Name() );
+				Link->Next = new THolder();
 			}
 		}
 		GError->Logf( TEXT("ElementHolder::GrabElement error.") );
 		return nullptr;
-		unguard_slow;
+		unguard;
 	}
 
-	//Releases element by adding to '_free' list
-	bool ReleaseElement(void* N)
+	//Releases element by adding index to '_free' list
+	bool Release( T* Element)
 	{
-		for ( ElementHolder<T,kb,hflags>* Link = this ; Link ; Link=Link->_next)
+		guard(#T#::Release); //Slow
+		if ( Element->CanRelease() )
 		{
-			int32 idx = Link->GetIndex( (T*)N);
-			if ( idx != -1 )
+			for ( THolder* Link=this ; Link ; Link=Link->Next )
 			{
-				if ( hflags & HF_Destruct )
-					Link->_holder[idx].~T();
-				if ( hflags & HF_ZeroExit )
-					memset( (char*)&Link->_holder[idx], 0, sizeof(T) );
-				Link->_free[Link->_freecount++] = idx;
-				return true;
+				int32 i = Link->GetLocalIndex( Element );
+				if ( (i != INDEX_NONE) )
+				{
+					if ( HolderFlags & EHF_DestroyOnRelease )
+						Link->Elements[i].~T();
+					if ( HolderFlags & EHF_ZeroOnRelease )
+						appMemzero( &Link->Elements[i], sizeof(Elements[0]) );
+
+					Link->Elements[i].SetAcquired(false);
+					Link->Available[Link->FreeCount++] = i;
+					return true;
+				}
 			}
 		}
-		//Deprecate these at some point
-		PlainText Error = PlainText( TEXT("ElementHolder::ReleaseElement error, TYPE=")) + T::Name();
-		GError->Log( *Error );
 		return false;
+		unguard;
 	}
 
 };
-
-//
-// Customized element holder for ActorInfo(s) (should contain ~ elements)
-//
-class ActorInfoHolder : public ElementHolder<ActorInfo,64>
-{
-public:
-	//Picks up a new element, will create new holder if no new elements
-	ActorInfo* GrabElement( class AActor* InitFor)
-	{
-		guard_slow(Grab);
-		ActorInfo* res = ElementHolder<ActorInfo,64>::GrabElement();
-		if ( res && !res->Init(InitFor) )
-		{
-			ReleaseElement(res);
-			return nullptr;
-		}
-		return res;
-		unguard_slow;
-	}
-	//Releases element by adding to '_free' list
-	void ReleaseElement(ActorInfo* AI)
-	{
-		if ( AI->Flags.bCommited )
-		{
-			AI->Flags.bCommited = false;
-			ElementHolder<ActorInfo,64>::ReleaseElement(AI);
-		}
-	}
-};
-
-//
-// Customized element holder for MiniTree(s) (should contain 779 elements)
-//
-class MiniTreeHolder : public ElementHolder<MiniTree,64,HF_ZeroInit|HF_Destruct|HF_ZeroExit>
-{
-public:
-};
-
-
-
 

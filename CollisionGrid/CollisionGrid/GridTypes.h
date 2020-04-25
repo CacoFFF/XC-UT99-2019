@@ -14,13 +14,12 @@
 
 */
 
-
-
 #pragma once
 
-#include "GridMath.h"
 
 #define GRID_NODE_DIM 512.f
+#define GRID_NODE_SPHERE 887.f
+// !!!! sqrt isn't constexpr, so change the sphere everytime we change DIM !!!!
 #define GRID_MULT 1.f/GRID_NODE_DIM
 #define MAX_TREE_DEPTH 3
 #define REQUIRED_FOR_SUBDIVISION 4
@@ -30,10 +29,7 @@
 
 extern cg::Vector Grid_Unit;
 extern cg::Vector Grid_Mult;
-extern cg::Vector SMALL_VECTOR;
 extern cg::Integers XYZi_One;
-extern cg::Vector ZNormals[2]; //Up then down
-extern cg::Integers Vector3Mask;
 
 
 struct ActorLink;
@@ -45,27 +41,55 @@ class RadiusHelper;
 class EncroachHelper;
 
 enum EFullGrid { E_FullGrid = 0 };
-enum ELocationType { ELT_Global = 0 , ELT_Node = 1 , ELT_Tree = 2 , ELT_Max = 3 };
+
+
+//
+// Grid container, UE interface
+//
+class FCollisionGrid : public FCollisionHashBase
+{
+public:
+	struct Grid* Grid;
+	class ActorInfoHolder* AIH;
+	class MiniTreeHolder* MTH;
+	uint32 CollisionTag;
+
+	//FCollisionGrid interface.
+	FCollisionGrid( ULevel* Level);
+	~FCollisionGrid();
+
+	// FCollisionHashBase interface.
+	virtual void Tick();
+	virtual void AddActor(AActor *Actor);
+	virtual void RemoveActor(AActor *Actor);
+	virtual FCheckResult* ActorLineCheck(FMemStack& Mem, FVector End, FVector Start, FVector Extent, uint32 ActorQueryFlags, uint8 ExtraNodeFlags);
+	virtual FCheckResult* ActorPointCheck(FMemStack& Mem, FVector Location, FVector Extent, uint32 ActorQueryFlags, uint32 ExtraNodeFlags);
+	virtual FCheckResult* ActorRadiusCheck(FMemStack& Mem, FVector Location, float Radius, uint32 ActorQueryFlags, int32 bAddOtherRadius);
+	virtual FCheckResult* ActorEncroachmentCheck(FMemStack& Mem, AActor* Actor, FVector Location, FRotator Rotation, uint32 ActorQueryFlags, uint32 ExtraNodeFlags);
+	virtual void CheckActorNotReferenced(AActor* Actor) {};
+
+	// FCollisionGrid interface.
+	bool FixActorLocation( AActor* Actor);
+};
+
 
 //
 // Basic Actor container
 //
-struct DE ActorInfo
+struct DE ActorInfo : public FHoldableElement
 {
-	//[16]
 	uint32 ObjIndex;
-	class AActor* Actor;
+	AActor* Actor;
+	UPrimitive* Primitive;
 	uint32 CollisionTag;
+	uint32 ActorQueryFlags;
 	struct
 	{
-		uint8 bUseCylinder:1; //Instead of box+primitive, do cylinder checking directly
-		uint8 bCommited:1; //Not free (element holder, needed because the reference can be shared)
-		uint8 bIsMovingBrush:1;
+		uint32 bCommited:1; //Not free (element holder, needed because the reference can be shared)
+		uint32 bIsMovingBrush:1;
+		uint32 bBoxReject:1;
+		uint32 bGlobal:1;
 	} Flags;
-	uint8 LocationType;
-	uint8 CurDepth; //These are per-grid, they gotta go
-	uint8 TopDepth;
-	//[32]
 	cg::Box GridBox;
 
 
@@ -82,8 +106,22 @@ struct DE ActorInfo
 
 	static const TCHAR* Name() { return TEXT("ActorInfo"); }
 
-	bool Init( AActor* InActor);
+	void Init( AActor* InActor);
 	bool IsValid() const;
+
+
+	bool CanAcquire() const
+	{
+		return !Flags.bCommited;
+	}
+	bool CanRelease() const
+	{
+		return Flags.bCommited;
+	}
+	void SetAcquired( bool bNewAcquired)
+	{
+		Flags.bCommited = bNewAcquired;
+	}
 };
 
 //int tat = sizeof(ActorInfo);
@@ -91,11 +129,14 @@ struct DE ActorInfo
 //
 // Actor Link container with helper functions
 //
-class DE ActorLinkContainer : public TArray<struct ActorInfo*>
+class DE ActorLinkContainer : public TArray<ActorInfo*>
 {
 public:
+	uint32 ActorQueryFlags;
+
 	ActorLinkContainer()
 		: TArray<ActorInfo*>()
+		, ActorQueryFlags(0)
 	{}
 
 	~ActorLinkContainer()
@@ -106,11 +147,19 @@ public:
 		ArrayNum = ArrayMax = 0;
 	}
 
+	int32 AddItem( ActorInfo* const& Item )
+	{
+		ActorQueryFlags |= Item->ActorQueryFlags;
+		return TArray<ActorInfo*>::AddItem(Item);
+	}
+
 	void Remove( int32 Index) //Fast remove, no memory move or deallocation
 	{
 		if ( Index < --ArrayNum )
 			(*this)(Index) = (*this)(ArrayNum);
 		(*this)(ArrayNum) = 0; //Temporary
+		if ( !ArrayNum )
+			ActorQueryFlags = 0;
 	}
 
 	bool RemoveItem( ActorInfo* AInfo)
@@ -140,7 +189,6 @@ public:
 struct DE GridElement
 {
 	ActorLinkContainer Actors;
-	MiniTree* Tree;
 	uint32 CollisionTag;
 	uint8 X, Y, Z, W;
 
@@ -161,14 +209,13 @@ struct DE Grid
 	cg::Integers Size;
 	cg::Box Box;
 	ActorLinkContainer Actors;
-	MiniTree* TreeList;
 	GridElement* Nodes;
 
 	Grid( class ULevel* Level);
 	~Grid();
 	
-	bool InsertActor( class AActor* InActor);
-	bool RemoveActor( class AActor* OutActor);
+	bool InsertActorInfo( ActorInfo* AInfo);
+	void RemoveActorInfo( ActorInfo* AInfo);
 	FCheckResult* LineQuery( const PrecomputedRay& Ray, uint32 ExtraNodeFlags);
 	void Tick();
 
@@ -176,128 +223,52 @@ struct DE Grid
 	GridElement* Node( int32 i, int32 j, int32 k);
 	GridElement* Node( const cg::Integers& I);
 	cg::Box GetNodeBoundingBox( const cg::Integers& Coords) const;
+
+	//Utils
+	void BoundsToGrid( cg::Vector::reg_type vMin, cg::Vector::reg_type vMax, cg::Integers& iMin, cg::Integers& iMax);
 };
 
 
-//
-// Mini octree for grid
-//
-struct DE MiniTree
-{
-	cg::Box Bounds;
-	MiniTree* Children[8];
-	MiniTree* Next; //Linked list
-	ActorLinkContainer Actors;
-	uint8 Depth;
-	uint8 Timer;
-	uint8 ChildCount;
-	uint8 HasActors; //Bit array
-
-	MiniTree() {}
-	MiniTree( Grid* G, const cg::Integers& C);
-	MiniTree( MiniTree* T, uint32 SubOctant);
-	~MiniTree();
-
-	static const TCHAR* Name() { return TEXT("MiniTree"); }
-
-	cg::Box GetSubOctantBox( uint32 Index) const;
-	uint32 GetSubOctant( const cg::Vector& Point) const;
-
-	void InsertActorInfo( ActorInfo* InActor, const cg::Box& Box);
-	void RemoveActorInfo( ActorInfo* InActor, const cg::Vector& Location);
-	void CleanupActors();
-	bool ShouldQuery() { return HasActors != 0 || Actors.Num() != 0; }
-
-	void GenericQuery( const GenericQueryHelper& Helper, FCheckResult*& ResultList);
-	void LineQuery( const PrecomputedRay& Ray, FCheckResult*& ResultList);
-};
-
+/*-----------------------------------------------------------------------
+                      Specialized Element Holders
+-----------------------------------------------------------------------*/
 
 //
-// Trace helper
+// Customized element holder for ActorInfo(s) (should contain ~ elements)
 //
-struct DE PrecomputedRay
-{
-	cg::Vector Org;
-	cg::Vector End;
-	cg::Vector Dir;
-	cg::Vector Inv;
-	cg::Integers iBoxV; //Backface cull helper
-	cg::Vector Extent;
-	cg::Vector coX;
-	float Length;
-	uint32 ExtraNodeFlags;
-	bool(PrecomputedRay::*Hits_CylActor)( ActorInfo*, FCheckResult*& Link) const;
-
-	PrecomputedRay( const FVector& TraceStart, const FVector& TraceEnd, const FVector& TraceExtent, uint32 ENF);
-
-
-	bool IntersectsBox( const cg::Box& Box) const;
-	void QueryContainer(ActorLinkContainer& Container, FCheckResult*& Result) const;
-
-	bool Hits_GCylActor( ActorInfo* AInfo, FCheckResult*& Link) const;
-	bool Hits_HCylActor( ActorInfo* AInfo, FCheckResult*& Link) const;
-	bool Hits_VCylActor( ActorInfo* AInfo, FCheckResult*& Link) const;
-
-	inline bool IsValid() { return ExtraNodeFlags != 0xFFFFFFFF; }
-};
-
-typedef void (GenericQueryHelper::*ActorQuery)( ActorInfo*, FCheckResult*&) const;
-//
-// Base model of the query helper
-//
-class DE GenericQueryHelper
+class ActorInfoHolder : public TElementHolder<ActorInfo,1500>
 {
 public:
-	cg::Vector Location;
-	cg::Box Bounds;
-	uint32 ExtraNodeFlags; //0xFFFFFFFF = invalid query
-	ActorQuery Query;
-
-	GenericQueryHelper() {}
-	GenericQueryHelper( const FVector& Loc3, uint32 InENF, ActorQuery NewQuery);
-	bool IntersectsBox( const cg::Box& Box) const;
-	FCheckResult* QueryGrid( Grid* Grids);
-	void QueryContainer( ActorLinkContainer& Container, FCheckResult*& Result) const;
-	inline bool IsValid() { return ExtraNodeFlags != 0xFFFFFFFF; }
-
+	//Picks up a new element, will create new holder if no new elements
+	ActorInfo* Acquire( class AActor* InitFor)
+	{
+		int32 GlobalIndex;
+		ActorInfo* AInfo = THolder::Acquire(GlobalIndex);
+		InitFor->CollisionTag = GlobalIndex;
+		if ( AInfo )
+			AInfo->Init(InitFor);
+		return AInfo;
+	}
 };
 
-// Point query helper
-class DE PointHelper : public GenericQueryHelper
+
+/*-----------------------------------------------------------------------
+                               Inlines
+-----------------------------------------------------------------------*/
+
+// Convert two Vector4 points into grid coordinates.
+inline void Grid::BoundsToGrid
+(
+	cg::Vector::reg_type vMin,
+	cg::Vector::reg_type vMax,
+	cg::Integers& iMin,
+	cg::Integers& iMax
+)
 {
-public:
-	cg::Vector Extent;
-
-	PointHelper( const FVector& Origin, const FVector& Extent, uint32 ExtraNodeFlags);
-
-	void PointQuery(ActorInfo* AInfo, FCheckResult*& ResultList) const;
-
-};
-
-// Radius query helper
-class DE RadiusHelper : public GenericQueryHelper
-{
-public:
-	float RadiusSq;
-
-	RadiusHelper( const FVector& Origin, float InRadius, uint32 ExtraNodeFlags);
-
-	void RadiusQuery(ActorInfo* AInfo, FCheckResult*& ResultList) const;
-
-};
-
-// Encroach query helper
-class DE EncroachHelper : public GenericQueryHelper
-{
-public:
-	AActor* Actor;
-	FRotator* Rotation;
-
-	EncroachHelper( AActor* InActor, const FVector& Loc3, FRotator* Rot3, uint32 InExtraNodeFlags);
-	~EncroachHelper();
-
-	void EncroachmentQuery(ActorInfo* AInfo, FCheckResult*& ResultList) const;
-	void EncroachmentQueryCyl(ActorInfo* AInfo, FCheckResult*& ResultList) const;
-
-};
+	cg::Vector GridMin = Box.Min;
+	vMin -= GridMin;
+	vMax -= GridMin;
+	cg::Vector Top = cg::Vectorize( Size - XYZi_One);
+	iMin = Clamp((vMin * Grid_Mult), cg::Vector(E_Zero), Top).Truncate32();
+	iMax = Clamp((vMax * Grid_Mult), cg::Vector(E_Zero), Top).Truncate32();
+}
