@@ -10,22 +10,20 @@ native(3540) final iterator function PawnActors( class<Pawn> PawnClass, out pawn
 //Listen server tweaks
 final function InitGame_Org( string Options, out string Error )
 {
-	local string InOpt, LeftOpt, NextMutator, NextDesc;
-	local int pos, i;
+	local string InOpt, LeftOpt;
+	local int pos;
 	local class<Mutator> MClass;
 	
 	InOpt = "";
 	LeftOpt = "";
-	NextMutator = "";
-	NextDesc = "";
 	pos = 0;
 	MClass = none;
 }
 
 event InitGame_Listen( string Options, out string Error )
 {
-	local string InOpt, LeftOpt, NextMutator, NextDesc;
-	local int pos, i;
+	local string InOpt, LeftOpt;
+	local int pos;
 	local class<Mutator> MClass;
 	
 	InitGame_Org( Options, Error);
@@ -78,6 +76,7 @@ event PostLogin( PlayerPawn NewPlayer )
 						For ( i=0 ; i<TLMax ; i++ )
 							if ( P.MultiSkins[j] == TextureList[i] )
 								Goto NEXT_SKIN;
+						TextureList.Insert( TLMax);
 						TextureList[TLMax++] = P.MultiSkins[j];
 					}
 					NEXT_SKIN:
@@ -86,8 +85,9 @@ event PostLogin( PlayerPawn NewPlayer )
 			else if ( (P.Skin != None) && (P.Skin != P.Default.Skin) )
 			{
 				For ( i=0 ; i<TLMax ; i++ )
-					if ( P.MultiSkins[j] == TextureList[i] )
+					if ( P.Skin == TextureList[i] )
 						Goto NEXT_PAWN;
+				TextureList.Insert( TLMax);
 				TextureList[TLMax++] = P.Skin;
 				NEXT_PAWN:
 			}
@@ -110,8 +110,6 @@ event PostLogin( PlayerPawn NewPlayer )
 		T[j++] = TextureList[i++];
 	if ( T[0] != None )
 		NewPlayer.ClientReplicateSkins( T[0], T[1], T[2]);
-	if ( TLMax > 0 )
-		Array_Length( TextureList, 0);
 }
 
 	

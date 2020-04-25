@@ -9,7 +9,7 @@ var() native array<string> DynamicPackages;
 
 event PreBeginPlay()
 {
-	local int i, Count;
+	local int i;
 	local ServerPackagesTracker OtherTracker;
 
 	ForEach DynamicActors( class'ServerPackagesTracker', OtherTracker)
@@ -19,9 +19,17 @@ event PreBeginPlay()
 			return;
 		}
 
-	Count = Array_Length(DynamicPackages);
-	For ( i=0 ; i<Count ; i++ )
+	For ( i=0 ; i<DynamicPackages.Length ; i++ )
 		AddToPackageMap( DynamicPackages[i] );
+		
+	SetTimer( 1.0, false); //Wait
+}
+
+// No use in keeping this actor
+event Timer()
+{
+	if ( DynamicPackages.Length == 0 )
+		Destroy();
 }
 
 //Does not set bScriptInitialized, can be intialized multiple times (needed for SaveGame)

@@ -31,3 +31,23 @@ final function InterpolateTo_MPFix( byte NewKeyNum, float Seconds )
 	}
 	InterpolateTo_Org( NewKeyNum, Seconds);
 }
+
+final function FinishedClosing_Test()
+{
+	// Update sound effects.
+	PlaySound( ClosedSound, SLOT_None );
+
+	// Notify our triggering actor that we have completed.
+	if( SavedTrigger != None )
+		SavedTrigger.EndEvent();
+	SavedTrigger = None;
+	Instigator = None;
+	FinishNotify();
+
+	//v469: Force extra update to make sure clients see this mover is closed
+	if ( KeyNum != PrevKeyNum )	
+	{
+		SimInterpolate.X = 100 * PhysAlpha;
+		Log("TEST!");
+	}
+}

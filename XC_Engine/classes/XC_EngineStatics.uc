@@ -25,15 +25,10 @@ var float Mutate_TimeStamp;
 var array<DPA> Mutate_Status;
 
 
-native(640) static final function int Array_Length_DPA( out array<DPA> Ar, optional int SetSize);
-native(641) static final function bool Array_Insert_DPA( out array<DPA> Ar, int Offset, optional int Count );
-native(642) static final function bool Array_Remove_DPA( out array<DPA> Ar, int Offset, optional int Count );
-
-
 static final function ResetAll()
 {
 	default.Mutate_TimeStamp = 0;
-	Array_Length_DPA( default.Mutate_Status, 0);
+	default.Mutate_Status.Length = 0;
 }
 
 
@@ -76,12 +71,12 @@ static final function bool Allow_Mutate( PlayerPawn Sender)
 	//Compute time stamps
 	TimeStampDiff = (Sender.Level.TimeSeconds - default.Mutate_TimeStamp) / Sender.Level.TimeDilation;
 	default.Mutate_TimeStamp = Sender.Level.TimeSeconds;
-	if (TimeStampDiff >= 1)	iMax = Array_Length_DPA( default.Mutate_Status, 0);
-	else					iMax = Array_Length_DPA( default.Mutate_Status);
+	if (TimeStampDiff >= 1)	iMax = default.Mutate_Status.Length = 0;
+	else					iMax = default.Mutate_Status.Length;
 	
 	//Compute new accumulated values and process player if found
 	For ( i=iMax-1 ; i>=0 ; i-- )
-		if ( ((default.Mutate_Status[i].Accumulated -= TimeStampDiff) < 0) && Array_Remove_DPA( default.Mutate_Status, i) )
+		if ( ((default.Mutate_Status[i].Accumulated -= TimeStampDiff) < 0) && default.Mutate_Status.Remove(i) )
 			iMax--;
 	//Accumulate 0.5 for caller
 	For ( i=0 ; i<iMax ; i++ )		
@@ -92,7 +87,7 @@ static final function bool Allow_Mutate( PlayerPawn Sender)
 			default.Mutate_Status[i].Accumulated += 0.5;
 			return true;
 		}
-	Array_Insert_DPA( default.Mutate_Status, 0);
+	default.Mutate_Status.Insert(0);
 	default.Mutate_Status[0].PlayerID = Sender.PlayerReplicationInfo.PlayerID;
 	default.Mutate_Status[0].Accumulated = 0.5;
 	return true;

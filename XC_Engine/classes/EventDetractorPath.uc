@@ -44,8 +44,8 @@ function Setup( NavigationPoint InTargetPath, EventLink InOwnerEvent, EventLink 
 	Assert( TargetPath == None);
 	Super.Setup( InTargetPath, InOwnerEvent, InEnablerEvent);
 
-	OwnerEvent.Detractors[Array_Length(OwnerEvent.Detractors)] = self; //Increase size of array
-	EnablerEvent.Detractors[Array_Length(EnablerEvent.Detractors)] = self; //Increase size of array
+	OwnerEvent.AddDetractor( self);
+	EnablerEvent.AddDetractor( self);
 
 	//We assume all previous Detractors are already properly linked
 	TargetLink = TargetPath; 
@@ -80,7 +80,10 @@ event Destroyed()
 			{
 				OwnerEvent.CleanupNavOutgoing( EDP);
 				if ( EDP != self )
+				{
+					Detractors.Insert( iEDP);
 					Detractors[iEDP++] = EDP;
+				}
 			}
 				
 		//Pass 2: give my UpstreamPaths back to TargetPath (Pass 1 needed to guarantee free path slots)

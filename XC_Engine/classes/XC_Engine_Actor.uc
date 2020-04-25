@@ -257,6 +257,10 @@ event XC_Init()
 	local class<Actor> AC, AC2;
 	local float Time[2];
 
+	// Some subclasses may not override this function, avoid double replacements.
+	if ( Class != class'XC_Engine_Actor' )
+		return;
+	
 	// Sample version check here
 //if ( int(ConsoleCommand("Get ini:Engine.Engine.GameEngine XC_Version")) < 19 )
 //		return;
@@ -278,6 +282,7 @@ event XC_Init()
 	{
 		Spawn( class'PreLoginHookAddon');
 		Spawn( class'PreLoginHookXCGE');
+		Spawn( class'ServerPauseDetector');
 		if ( ConfigModule.bFixBroadcastMessage )
 		{
 			ReplaceFunction( class'Actor', class'XC_Engine_Actor', 'BroadcastMessage', 'BroadcastMessage');
@@ -305,6 +310,7 @@ event XC_Init()
 			ReplaceFunction( class'XC_Engine_Mover', class'Mover', 'InterpolateTo_Org', 'InterpolateTo'); //Backup the function
 			ReplaceFunction( class'Mover', class'XC_Engine_Mover', 'InterpolateTo', 'InterpolateTo_MPFix'); //Apply the fix
 		}
+		ReplaceFunction( class'Mover', class'XC_Engine_Mover', 'FinishedClosing', 'FinishedClosing_Test');
 		ReplaceFunction( class'GameInfo', class'XC_Engine_GameInfo', 'PostLogin', 'PostLogin');
 		ReplaceFunction( class'PlayerPawn', class'XC_Engine_PlayerPawn', 'ServerMove', 'ServerMove'); //Smart bandwidth usage
 		ReplaceFunction( class'PlayerPawn', class'XC_Engine_PlayerPawn', 'Mutate', 'Mutate');
@@ -435,7 +441,6 @@ final function bool AttachMenu()
 // 
 
 native(3538) final function NavigationPoint MapRoutes_FPTW( Pawn Seeker, optional NavigationPoint StartAnchors[16], optional name RouteMapperEvent);
-native(640) static final function int Array_Length_NP( out array<NavigationPoint> Ar, optional int SetSize);
 
 event FindPathToward_Event( Pawn Seeker, array<NavigationPoint> StartAnchors)
 {

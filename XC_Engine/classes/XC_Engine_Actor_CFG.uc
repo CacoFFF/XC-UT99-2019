@@ -13,9 +13,6 @@ var() config bool bAnyFaceOnSkin;
 var() config bool bEventChainAddon;
 var() config int LastVersion;
 
-native(640) static final function int Array_Length_Str( out array<string> Ar, optional int SetSize);
-native(641) static final function bool Array_Insert_Str( out array<string> Ar, int Offset, optional int Count );
-native(642) static final function bool Array_Remove_Str( out array<string> Ar, int Offset, optional int Count );
 
 /*=============== Setup begin ===============*/
 //
@@ -23,7 +20,7 @@ native(642) static final function bool Array_Remove_Str( out array<string> Ar, i
 //
 function Setup( XC_Engine_Actor Other)
 {
-	local int i, k, ACount;
+	local int i, k;
 	local string Parsed;
 	local class<XC_Engine_Actor> aClass;
 	local XC_Engine_Actor NewActor;
@@ -32,8 +29,7 @@ function Setup( XC_Engine_Actor Other)
 
 	UpgradeVersion();
 	
-	ACount = Array_Length_Str( XCGE_Actors);
-	for ( i=0 ; i<ACount ; i++ )
+	for ( i=0 ; i<XCGE_Actors.Length ; i++ )
 	{
 		ClassName = '';
 		Parsed = XCGE_Actors[i];
@@ -139,7 +135,7 @@ function UpgradeVersion()
 	
 	if ( LastVersion < 22 )
 	{
-		Array_Length_Str( XCGE_Actors, 0);
+		XCGE_Actors.Length = 0;
 		AddConditionUnique( "PACKAGE:Unreali:XC_Engine_UT99.XC_Engine_UT99_Actor");
 		AddConditionUnique( "PACKAGE:s_SWAT:XC_Engine_TOs.XC_Engine_TOs_Actor");
 		AddConditionUnique( "CLASS:SCFActor:XC_Engine.SCF_Disabler");
@@ -157,6 +153,11 @@ function UpgradeVersion()
 		AddConditionUnique( "PACKAGE:Unreali:XC_Engine_UT99.UT99AddonsPack");
 	}
 	
+	if ( LastVersion < 25 )
+	{
+		AddConditionUnique( "XC_Engine.ServerPackagesTracker");
+	}
+	
 	LastVersion = 24;
 }
 /*=============== UpgradeVersion end ===============*/
@@ -171,11 +172,11 @@ function AddConditionUnique( string Condition)
 {
 	local int i, Size;
 	
-	Size = Array_Length_Str( XCGE_Actors);
+	Size = XCGE_Actors.Length;
 	for ( i=0 ; i<Size ; i++ )
 		if ( XCGE_Actors[i] == Condition )
 			return;
-	Array_Insert_Str( XCGE_Actors, i, 1);
+	XCGE_Actors.Insert( i, 1);
 	XCGE_Actors[i] = Condition;
 }
 /*=============== AddConditionUnique end ===============*/

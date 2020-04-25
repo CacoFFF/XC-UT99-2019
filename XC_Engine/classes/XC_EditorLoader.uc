@@ -5,12 +5,6 @@
 class XC_EditorLoader expands Object
 	native;
 
-//*********************************************
-// Array opcodes
-
-native(640) static final function int Array_Length( out array<Object> Ar, optional int SetSize);
-native(641) static final function bool Array_Insert( out array<Object> Ar, int Offset, optional int Count );
-native(642) static final function bool Array_Remove( out array<Object> Ar, int Offset, optional int Count );
 
 //********************************************
 // XC_Core opcodes

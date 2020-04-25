@@ -38,15 +38,17 @@ static final function array<EventLink> GetEnablers( Actor Other)
 
 static final function array<Actor> GetEnablerActor( Actor Other)
 {
-	local int i, j, Count;
+	local int i;
 	local array<EventLink> Enablers;
 	local array<Actor> EnablerActors;
 	
 	Enablers = GetEnablers( Other);
-	Count = Array_Length(Enablers);
-	for ( i=0 ; i<Count ; i++ )
+	for ( i=Enablers.Length-1 ; i>=0 ; i-- )
 		if ( Enablers[i].Owner != None )
-			EnablerActors[j++] = Enablers[i].Owner;
+		{
+			EnablerActors.Insert(0);
+			EnablerActors[0] = Enablers[i].Owner;
+		}
 	return EnablerActors;
 }
 
@@ -71,6 +73,7 @@ static final function RerouteEndPoint( EventLink OwnerEvent, NavigationPoint Tar
 	
 	if ( TargetPath != None )
 	{
+		TargetPaths.Insert(0);
 		TargetPaths[0] = TargetPath;
 		RerouteEndPoints( OwnerEvent, TargetPaths, Seeker, ForceEnabler);
 	}
@@ -91,7 +94,7 @@ static final function RerouteEndPoints( EventLink OwnerEvent, array<NavigationPo
 	if ( OwnerEvent == None )
 		return;
 
-	PathCount = Array_Length( TargetPaths);
+	PathCount = TargetPaths.Length;
 	if ( PathCount <= 0 )
 		return;
 	
@@ -102,7 +105,7 @@ static final function RerouteEndPoints( EventLink OwnerEvent, array<NavigationPo
 			if ( EL.bRoot )
 			{
 				EnablerEvents = EL.GetEnabledRoots();
-				EnablerCount = Array_Length( EnablerEvents);
+				EnablerCount = EnablerEvents.Length;
 				break;
 			}
 	}
@@ -111,13 +114,13 @@ static final function RerouteEndPoints( EventLink OwnerEvent, array<NavigationPo
 	if ( EnablerCount == 0 )
 	{
 		EnablerEvents = OwnerEvent.GetEnabledRoots();
-		EnablerCount = Array_Length( EnablerEvents);
+		EnablerCount = EnablerEvents.Length;
 		if ( EnablerCount == 0 )
 			return;
 	}
 
 	//Setup or update attractor if needed
-	AttractorCount = Array_Length( OwnerEvent.Attractors);
+	AttractorCount = OwnerEvent.Attractors.Length;
 	for ( i=0 ; i<EnablerCount ; i++ )
 	{
 		EAP = None;
@@ -142,7 +145,7 @@ static final function RerouteEndPoints( EventLink OwnerEvent, array<NavigationPo
 	//Update existing detractors
 	OldInstigator = OwnerEvent.Instigator;
 	OwnerEvent.Instigator = Seeker;
-	DetractorCount = Array_Length( OwnerEvent.Detractors);
+	DetractorCount = OwnerEvent.Detractors.Length;
 	for ( i=0 ; i<EnablerCount ; i++ )
 	{
 		for ( k=0 ; k<PathCount ; k++ )

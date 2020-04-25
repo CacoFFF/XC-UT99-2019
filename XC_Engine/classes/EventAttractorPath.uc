@@ -64,8 +64,8 @@ function Setup( NavigationPoint InTargetPath, EventLink InOwnerEvent, EventLink 
 	
 	Super.Setup( InTargetPath, InOwnerEvent, InEnablerEvent);
 
-	OwnerEvent.Attractors[Array_Length(OwnerEvent.Attractors)] = self; //Increase size of array
-	EnablerEvent.Attractors[Array_Length(EnablerEvent.Attractors)] = self; //Increase size of array
+	OwnerEvent.AddAttractor( self );
+	EnablerEvent.AddAttractor( self );
 
 	// Force creation of an AI Marker (marked for destruction after not needed)
 	DeferPoint = EnablerEvent.DeferTo();
@@ -107,7 +107,7 @@ function AddAttractorDestinations( array<NavigationPoint> NewDestinations)
 		return;
 		
 	//Optimize route mapping for finding a single navigaiton point
-	DestinationCount = Array_Length( NewDestinations);
+	DestinationCount = NewDestinations.Length;
 	if ( DestinationCount == 1 )
 	{
 		TargetPath = NewDestinations[0];

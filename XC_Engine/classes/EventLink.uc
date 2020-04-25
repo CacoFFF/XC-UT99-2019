@@ -48,11 +48,11 @@ event Destroyed()
 		NotifyList = NotifyList.NextNotify;
 	}
 	
-	for ( i=Array_Length(Attractors)-1 ; i>=0 ; i-- )
+	for ( i=Attractors.Length-1 ; i>=0 ; i-- )
 		if ( Attractors[i] != None )
 			Attractors[i].Destroy();
 
-	for ( i=Array_Length(Detractors)-1 ; i>=0 ; i-- )
+	for ( i=Detractors.Length-1 ; i>=0 ; i-- )
 		if ( Detractors[i] != None )
 			Detractors[i].Destroy();
 	
@@ -60,8 +60,6 @@ event Destroyed()
 		DestroyAIMarker();
 		
 	CleanupEvents();
-		
-
 }
 
 //========================== Notifications
@@ -171,22 +169,40 @@ function DetractorUpdate( EventDetractorPath EDP)
 
 }
 
+final function AddAttractor( EventAttractorPath EAP)
+{
+	local int i;
+	
+	i = Attractors.Length;
+	Attractors.Insert(i);
+	Attractors[i] = EAP;
+}
+
+final function AddDetractor( EventDetractorPath EDP)
+{
+	local int i;
+	
+	i = Detractors.Length;
+	Detractors.Insert(i);
+	Detractors[i] = EDP;
+}
+
 final function RemoveAttractor( EventAttractorPath EAP)
 {
 	local int i;
 
-	for ( i=Array_Length(Attractors)-1 ; i>=0 ; i-- )
+	for ( i=Attractors.Length-1 ; i>=0 ; i-- )
 		if ( Attractors[i] == EAP || Attractors[i] == None || Attractors[i].bDeleteMe )
-			Array_Remove( Attractors, i);
+			Attractors.Remove(i);
 }
 
 final function RemoveDetractor( EventDetractorPath EDP)
 {
 	local int i;
 
-	for ( i=Array_Length(Detractors)-1 ; i>=0 ; i-- )
+	for ( i=Detractors.Length-1 ; i>=0 ; i-- )
 		if ( Detractors[i] == EDP || Detractors[i] == None || Detractors[i].bDeleteMe )
-			Array_Remove( Detractors, i);
+			Detractors.Remove(i);
 }
 
 
@@ -251,9 +267,9 @@ final function CleanupEvents()
 	EventList = ";";
 	
 	// Queue single root for cleanup
-	for ( i=Array_Length(RootEvents)-1 ; i>=0 ; i-- )
+	for ( i=0 ; i<RootEvents.Length ; i++ )
 		RootEvents[i].CleanupEvents();
-	Array_Length( RootEvents, 0);
+	RootEvents.Length = 0;
 	
 	//Last step, done once
 	if ( bRootCleanup )
@@ -327,10 +343,11 @@ final function AddRoot( EventLink Other)
 {
 	local int i, Count;
 	
-	Count = Array_Length( RootEvents);
+	Count = RootEvents.Length;
 	for ( i=0 ; i<Count ; i++ )
 		if ( RootEvents[i] == Other )
 			return;
+	RootEvents.Insert( Count );
 	RootEvents[Count] = Other;
 }
 
@@ -342,15 +359,19 @@ final function array<EventLink> GetEnabledRoots( optional bool bSubQuery)
 	if ( !bSubQuery )
 		StartQuery();
 	if ( bRoot && bRootEnabled )
+	{
+		EnabledList.Insert(0);
 		EnabledList[EnabledCount++] = self;
+	}
 
-	for ( i=Array_Length(RootEvents)-1 ; i>=0 ; i-- )
+	for ( i=0 ; i<RootEvents.Length ; i++ )
 		if ( RootEvents[i].ValidQuery() )
 		{
 			RootAdd = RootEvents[i].GetEnabledRoots( true);
-			for ( j=Array_Length(RootAdd)-1 ; j>=0 ; j-- )
+			EnabledList.Insert( EnabledCount, RootAdd.Length);
+			for ( j=0 ; j<RootAdd.Length ; j++ )
 				EnabledList[EnabledCount++] = RootAdd[j];
-		}		
+		}
 	return EnabledList;
 }
 
@@ -365,7 +386,7 @@ final function bool ChainInProgress( optional bool bNearestRootOnly, optional bo
 	if ( bRoot && bSubQuery && bNearestRootOnly )
 		return false;
 		
-	for ( i=Array_Length(RootEvents)-1 ; i>=0 ; i-- )
+	for ( i=0 ; i<RootEvents.Length ; i++ )
 		if ( RootEvents[i].ValidQuery() && RootEvents[i].ChainInProgress( bNearestRootOnly, true) )
 			return true;
 	return false;
@@ -380,7 +401,7 @@ final function bool RootIsEnabled( optional bool bSubQuery)
 	if ( bRoot && bRootEnabled )
 		return true;
 		
-	for ( i=Array_Length(RootEvents)-1 ; i>=0 ; i-- )
+	for ( i=0 ; i<RootEvents.Length ; i++ )
 		if ( RootEvents[i].ValidQuery() && RootEvents[i].RootIsEnabled( true) )
 			return true;
 	return false;
