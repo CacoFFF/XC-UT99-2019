@@ -1,3 +1,6 @@
 [submodule "XC_Core"]
 	path = XC_Core
 	url = https://github.com/CacoFFF/XC_Core
+[submodule "CacusLib"]
+	path = CacusLib
+	url = https://github.com/CacoFFF/CacusLib
