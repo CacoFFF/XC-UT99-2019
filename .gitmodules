@@ -4,3 +4,9 @@
 [submodule "CacusLib"]
 	path = CacusLib
 	url = https://github.com/CacoFFF/CacusLib
+[submodule "CollisionGrid"]
+	path = CollisionGrid
+	url = https://github.com/CacoFFF/CollisionGrid
+[submodule "XC_IpDrv"]
+	path = XC_IpDrv
+	url = https://github.com/CacoFFF/XC_IpDrv
