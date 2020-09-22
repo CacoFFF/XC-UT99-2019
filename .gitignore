@@ -5,6 +5,7 @@
 *.ncb
 *.opt
 *.plg
+*.bat
 .vc/
 ipch/
 Debug/
