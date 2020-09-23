@@ -32,68 +32,6 @@ function Weapon WeaponChange( byte F )
 	//Implicity NULL return
 }
 
-// set which hand is holding weapon
-// Fix a shoot/draw offset exploit
-function setHand(float Hand)
-{
-	if ( Hand == 2 )
-	{
-		PlayerViewOffset.Y = 0;
-		FireOffset.Y = 0;
-		bHideWeapon = true;
-		return;
-	}
-	else
-		bHideWeapon = false;
-
-	Hand = fClamp( Hand, -1.2, 1.2);
-	if ( Hand == 0 )
-	{
-		PlayerViewOffset.X = Default.PlayerViewOffset.X * 0.88;
-		PlayerViewOffset.Y = -0.2 * Default.PlayerViewOffset.Y;
-		PlayerViewOffset.Z = Default.PlayerViewOffset.Z * 1.12;
-	}
-	else
-	{
-		PlayerViewOffset.X = Default.PlayerViewOffset.X;
-		PlayerViewOffset.Y = Default.PlayerViewOffset.Y * Hand;
-		PlayerViewOffset.Z = Default.PlayerViewOffset.Z;
-	}
-	PlayerViewOffset *= 100; //scale since network passes vector components as ints
-	FireOffset.Y = Default.FireOffset.Y * Hand;
-}
-
-
-function Inventory Weapon_SpawnCopy( pawn Other )
-{
-	local Weapon Copy;
-
-	if( Level.Game.ShouldRespawn(self) )
-	{
-		Copy = spawn(Class,Other,,,rot(0,0,0));
-		Copy.Tag           = Tag;
-		Copy.Event         = Event;
-		Copy.PickupAmmoCount = PickupAmmoCount;
-		if ( AmmoName != None )
-			Copy.AmmoName = AmmoName;
-		if ( !bWeaponStay )
-			GotoState('Sleeping');
-	}
-	else
-		Copy = self;
-
-	Copy.RespawnTime = 0.0;
-	Copy.bHeldItem = true;
-	Copy.bTossedOut = false;
-	Copy.GiveTo( Other );
-	Copy.Instigator = Other;
-	Copy.GiveAmmo(Other);
-	Copy.SetSwitchPriority(Other);
-	if ( !Other.bNeverSwitchOnPickup )
-		Copy.WeaponSet(Other);
-	Copy.AmbientGlow = 0;
-	return Copy;
-}
 
 function CheckVisibility()
 {

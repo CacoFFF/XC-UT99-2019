@@ -7,30 +7,26 @@ class ServerPackagesTracker expands XC_Engine_Actor
 var() transient array<string> ServerPackages;
 var() native array<string> DynamicPackages;
 
-event PreBeginPlay()
+event XC_Init()
 {
-	local int i;
 	local ServerPackagesTracker OtherTracker;
 
 	ForEach DynamicActors( class'ServerPackagesTracker', OtherTracker)
 		if ( OtherTracker != self )
 		{
 			Destroy();
+			OtherTracker.RestoreDynamicPackages();
 			return;
 		}
-
-	For ( i=0 ; i<DynamicPackages.Length ; i++ )
-		AddToPackageMap( DynamicPackages[i] );
-		
-	SetTimer( 1.0, false); //Wait
 }
 
-// No use in keeping this actor
-event Timer()
+function RestoreDynamicPackages()
 {
-	if ( DynamicPackages.Length == 0 )
-		Destroy();
-}
+	local int i;
 
-//Does not set bScriptInitialized, can be intialized multiple times (needed for SaveGame)
-event SetInitialState();
+	For ( i=0; i<DynamicPackages.Length; i++)
+	{
+		Log("Restoring old Dynamic Package:"@DynamicPackages[i]);
+		AddToPackageMap( DynamicPackages[i] );
+	}
+}

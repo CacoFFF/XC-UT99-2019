@@ -1,0 +1,56 @@
+These are a few samples of XC_GameEngine settings.
+
+- Use the map sorting functions if you need to fix your mapvote.
+- Copy ServerPackages and ServerActors from your Engine.GameEngine block
+
+
+Client:
+[XC_Engine.XC_GameEngine]
+bCacheConvertAtJoin=True
+bAutoCompressLZMA=False (True if you host LAN games)
+;ServerPackages=
+;ServerActors=
+
+Siege server:
+[XC_Engine.XC_GameEngine]
+NoBrushTrackerFix=CTF-Niven
+NoBrushTrackerFix=CTF-'uK-Simplex][
+NoBrushTrackerFix=CTF-Niven][
+; Add any other maps where doors make it unplayable
+;ServerPackages=
+;ServerActors=
+
+CTF/DM/TDM/AS server:
+[XC_Engine.XC_GameEngine]
+;ServerPackages=
+;ServerActors=
+
+Coop server:
+[XC_Engine.XC_GameEngine]
+bSortMaplistByFolder=True
+bAutoTravelManager=True
+bFasterUpload=True
+;ServerPackages=
+;ServerActors=
+
+MH server:
+[XC_Engine.XC_GameEngine]
+bSortMaplistGlobal=True
+bFasterUpload=True
+;ServerPackages=
+;ServerActors=
+
+
+- If you're running a NexGen server and you want to prevent reconnect spam from banned players:
+Add to ServerActors: NexgenXCGE_01.NexgenXCGE_PreLogin
+
+==========================
+Advanced settings (defaults displayed):
+[XC_Engine.XC_GameEngine]
+bUseLevelHook=True	(hooks the level object after map is loaded)
+bUseNewRelevancy=True	(runs the relevancy loop on net servers using xcge code)
+bEnableDebugLogs=False
+bAutoCompressLZMA=True  (run LZMA autocompressor)
+bForceLevelHook=False	(use level hook on client sessions, may trigger ACE)
+bInterceptLog=True      (Add thread-safe layer to log, filters log spam by grouping lines together)
+bCollisionHashHook=True (Uses CollisionGrid)

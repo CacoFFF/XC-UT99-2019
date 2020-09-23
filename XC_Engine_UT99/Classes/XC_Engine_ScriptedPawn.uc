@@ -2,8 +2,6 @@ class XC_Engine_ScriptedPawn expands ScriptedPawn
 	abstract;
 
 const SP = class'XC_Engine_ScriptedPawn';
-	
-var bool bAttitudeQuery;
 
 function Pawn Pawn_PickTarget(out float bestAim, out float bestDist, vector FireDir, vector projStart)
 {
@@ -140,62 +138,9 @@ function SkaarjBerserker_WhatToDoNext(name LikelyState, name LikelyLabel)
 	Super(ScriptedPawn).WhatToDoNext( LikelyState, LikelyLabel);
 }
 
-//*****************************************************************************************
-// AttitudeToCreature ensures that both monsters agree on how to treat each other
-// If a pawn wants to treat as friend or follow me, i'll treat as friend as well
-function eAttitude AttitudeToCreature( Pawn Other)
-{
-	local eAttitude Attitude;
-	
-	if( Other.Class == Class )
-		Attitude = ATTITUDE_Friendly;
-	else if ( ClassIsChildOf( Other.Class, class'ScriptedPawn')	&& !SP.default.bAttitudeQuery )
-	{
-		SP.default.bAttitudeQuery = true;
-		Attitude = ScriptedPawn(Other).AttitudeToCreature( self);
-		SP.default.bAttitudeQuery = false;
-		if ( Attitude > ATTITUDE_Friendly )
-			Attitude = ATTITUDE_Friendly;
-		else if ( Attitude < ATTITUDE_Ignore )
-			Attitude = ATTITUDE_Ignore;
-	}
-	else
-		Attitude = ATTITUDE_Ignore;
-	return Attitude;
-}
 
 
-function eAttitude AttitudeTo( Pawn Other)
-{
-	if ( Other.bIsPlayer && (Other.PlayerReplicationInfo != None) )
-	{
-		if ( bIsPlayer && Level.Game.bTeamGame && (Team == Other.PlayerReplicationInfo.Team) )
-			return ATTITUDE_Friendly;
-		else if ( (Intelligence > BRAINS_None) && 
-			((AttitudeToPlayer == ATTITUDE_Hate) || (AttitudeToPlayer == ATTITUDE_Threaten) 
-				|| (AttitudeToPlayer == ATTITUDE_Fear)) ) //check if afraid 
-		{
-			if (RelativeStrength(Other) > Aggressiveness)
-				AttitudeToPlayer = AttitudeWithFear();
-			else if (AttitudeToPlayer == ATTITUDE_Fear)
-				AttitudeToPlayer = ATTITUDE_Hate;
-		}
-		return AttitudeToPlayer;
-	}
-	else if ( Hated == Other )
-	{
-		if (RelativeStrength(Other) >= Aggressiveness)
-			return AttitudeWithFear();
-		else 
-			return ATTITUDE_Hate;
-	}
-	else if ( (TeamTag != '') && (ScriptedPawn(Other) != None) && (TeamTag == ScriptedPawn(Other).TeamTag) )
-		return ATTITUDE_Friendly;
-	else	
-		return AttitudeToCreature(Other); 
-}
-
-
+// REVIEW ASAP, CHANGES IN V469
 function bool SetEnemy( Pawn NewEnemy )
 {
 	local bool result;
@@ -315,29 +260,6 @@ function bool SetEnemy( Pawn NewEnemy )
 	return result;
 }
 
-
-function bool ScriptedPawn_MeleeDamageTarget(int hitdamage, vector pushdir)
-{
-	local vector HitLocation, HitNormal, TargetPoint;
-	local actor HitActor;
-
-	if ( Target == None && ( Enemy != None  && Enemy.Health > 0 ) )
-		Target = Enemy;
-	if ( Target != None )
-	{
-		if ( (VSize(Target.Location - Location) <= MeleeRange * 1.4 + Target.CollisionRadius + CollisionRadius)
-			&& ((Physics == PHYS_Flying) || (Physics == PHYS_Swimming) || (Abs(Location.Z - Target.Location.Z) 
-				<= FMax(CollisionHeight, Target.CollisionHeight) + 0.5 * FMin(CollisionHeight, Target.CollisionHeight))) )
-		{
-			HitActor = Trace(HitLocation, HitNormal, Target.Location, Location, false);
-			if ( HitActor != None )
-				return false;
-			Target.TakeDamage(hitdamage, Self,HitLocation, pushdir, 'hacked');
-			return true;
-		}
-	}
-	return false;
-}
 
 function ScriptedPawn_StartRoaming()
 {

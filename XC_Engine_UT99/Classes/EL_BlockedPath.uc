@@ -24,7 +24,7 @@ function Update()
 	
 	DestroyAIMarker();
 	Unlockers = GetEnabledRoots();
-	if ( Array_Length(Unlockers) > 0 ) //TODO: USE ATTRACTOR SYSTEM
+	if ( Unlockers.Length > 0 ) //TODO: USE ATTRACTOR SYSTEM
 		Unlocker = Unlockers[0];
 	DefineAttractor();
 	SetTimer( 20 + FRand() * 30, false);

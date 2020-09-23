@@ -179,6 +179,7 @@ static final function ModifySkinItem_TP( Actor SkinActor, class<TournamentPlayer
 		return;
 		
 	FaceSkin = TPInstance.default.FaceSkin + 1;
+
 	Face = Texture( DynamicLoadObject(FacePackage$SkinItem$FaceSkin$FaceItem, class'Texture', true));
 	if ( Face != None )
 		return;
@@ -190,7 +191,7 @@ static final function ModifySkinItem_TP( Actor SkinActor, class<TournamentPlayer
 	Clock( F);
 	if ( LoadPackageContents( FacePackage, class'Texture', TextureList) )
 	{
-		for ( i=Array_Length(TextureList)-1 ; i>=0 ; i-- )
+		for ( i=TextureList.Length-1 ; i>=0 ; i-- )
 		{
 			TextureName = string(TextureList[i].Name);
 			if ( Right(TextureName,Len(FaceItem)) ~= FaceItem )
@@ -239,7 +240,9 @@ static function SetMultiSkin_Boss(Actor SkinActor, string SkinName, string FaceN
 	
 	if( (Pawn(SkinActor) != None) && (Pawn(SkinActor).PlayerReplicationInfo != None) ) 
 	{
-		Pawn(SkinActor).PlayerReplicationInfo.TalkTexture = Texture(DynamicLoadObject(SkinName$"5Xan", class'Texture'));
+		Pawn(SkinActor).PlayerReplicationInfo.TalkTexture = Texture(DynamicLoadObject(SkinName$"5"$TeamAppend, class'Texture', true));
+		if ( Pawn(SkinActor).PlayerReplicationInfo.TalkTexture == None )
+			Pawn(SkinActor).PlayerReplicationInfo.TalkTexture = Texture(DynamicLoadObject(SkinName$"5Xan", class'Texture'));
 	}
 }
 

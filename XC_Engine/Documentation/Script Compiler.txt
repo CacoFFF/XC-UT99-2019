@@ -1,0 +1,98 @@
+===================================
+Script Compiler addons (win32 only)
+===================================
+
+When XC_Core is loaded during UnrealScript compilation, the script compiler
+may add extra functions to Core and Actor.
+While these functions don't precisely exist in Unreal Tournament's stock
+classes, it may be possible to call these functions under specific conditions.
+
+The usefulness of this is a huge amount of code simplification and access to
+other mod's functionalities without generating package dependency.
+
+You may perform a simple XC_Engine check on the machine running the code to
+avoid crashing the game/server by adding something like this:
+
+// Sample version check here
+if ( int(ConsoleCommand("get ini:Engine.Engine.GameEngine XC_Version")) >= 19 )
+{
+	// Run XC_Engine safe code here
+	// Most XC_Engine functions are safe to use from version 19 and above
+	// The route mapper requires version 24
+	// To limit to v469 you must check for version 25
+}
+
+Note: Dynamic arrays have been officially implemented in v469, but XC_Engine
+supports those as of version 19 as well, so you may always check for either
+XC_Version or Level.EngineVersion (>=469) before using them.
+
+
+==================================
+Functions available to all actors:
+
+; Describe a reachSpec **safe**
+native(519) final function describeSpec(int iSpec, out Actor Start, out Actor End, out int ReachFlags, out int Distance); 
+
+; Add/check packages to server's download list **XC_Engine required**
+native(1718) final function bool AddToPackageMap( optional string PkgName);
+native(1719) final function bool IsInPackageMap( optional string PkgName, optional bool bServerPackagesOnly);
+
+; Actor iterators **XC_Engine required**
+native(3540) final iterator function PawnActors( class<Pawn> PawnClass, out pawn P, optional float Distance, optional vector VOrigin, optional bool bHasPRI, optional Pawn StartAt);
+native(3541) final iterator function NavigationActors( class<NavigationPoint> NavClass, out NavigationPoint P, optional float Distance, optional vector VOrigin, optional bool bVisible);
+native(3542) final iterator function InventoryActors( class<Inventory> InvClass, out Inventory Inv, optional bool bSubclasses, optional Actor StartFrom); 
+native(3552) final iterator function CollidingActors( class<Actor> BaseClass, out actor Actor, float Radius, optional vector Loc);
+native(3553) final iterator function DynamicActors( class<Actor> BaseClass, out actor Actor, optional name MatchTag );
+
+; Script Patcher **XC_Engine required**
+native(3560) static final function bool ReplaceFunction( class<Object> ReplaceClass, class<Object> WithClass, name ReplaceFunction, name WithFunction, optional name InState);
+native(3561) static final function bool RestoreFunction( class<Object> RestoreClass, name RestoreFunction, optional name InState);
+
+
+===================================
+Functions available to all objects:
+
+; Unreal 227 compatible functions **XC_Engine or Unreal 227 required**
+native(192) static final function Color MakeColor( byte R, byte G, byte B, optional byte A);
+native(257) static final function bool LoadPackageContents( string PackageName, class<Object> ListType, out array<Object> PckContents );
+native(391) static final function name StringToName( string S );
+native(600) static final function Object FindObject( string ObjectName, class ObjectClass, optional Object ObjOuter ); //ObjOuter param incompatible with 227!!!
+native(601) static final function Class<Object> GetParentClass( Class<Object> ObjClass );
+native(602) static final iterator function AllObjects( class<Object> BaseClass, out Object Obj );
+native(643) static final function float AppSeconds();
+
+
+; Other XC_Engine functions **XC_Engine required**
+native(3014) static final function bool HasFunction(name FunctionName, optional Object ObjToSearch); //Defaults to caller
+native(3554) static final function iterator ConnectedDests( NavigationPoint Start, out Actor End, out int ReachSpecIdx, out int PathArrayIdx); //XC_Core
+native(3555) static final operator(22) Object | (Object A, skip Object B);
+native(3555) static final operator(22) Object | (Actor A, skip Actor B);
+native(3556) static final function Clock( out float C[2]);
+native(3557) static final function float UnClock( out float C[2]);
+native(3559) static final function int AppCycles();
+native(3558) static final function name FixName( string InName, optional bool bCreate); //Fixes name case, optionally create if not there
+native(3570) static final function vector HNormal( vector A);
+native(3571) static final function float HSize( vector A);
+native(3572) static final function float InvSqrt( float C);
+
+
+=======================
+User defined functions:
+
+As of XC_Engine 25, the script compiler can add extra functions to
+the table of global functions, the requirements are as follows:
+
+- Create a class named "GlobalFunctions" in your mod 
+(make sure no other GlobalFunctions exists at compile time)
+
+- Define the functions you want to be global in said class.
+** If GlobalFunctions is a subclass of Actor, all non-static functions
+** will only be available to Actors and not Objects.
+
+- 'final' functions will be executed as defined in GlobalFunctions, while
+the remaining functions will be executed as defined in the Object.
+** This means that non-final functions will only work as simple declarations.
+** In said case if the Object doesn't have a function with the same name/params
+** the game/server will simply crash.
+
+

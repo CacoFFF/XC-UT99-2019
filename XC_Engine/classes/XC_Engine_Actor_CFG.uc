@@ -28,6 +28,7 @@ function Setup( XC_Engine_Actor Other)
 	local name ClassName;
 
 	UpgradeVersion();
+	default.bAnyFaceOnSkin = bAnyFaceOnSkin;
 	
 	for ( i=0 ; i<XCGE_Actors.Length ; i++ )
 	{
@@ -156,6 +157,7 @@ function UpgradeVersion()
 	if ( LastVersion < 25 )
 	{
 		AddConditionUnique( "XC_Engine.ServerPackagesTracker");
+		AddConditionUnique( "PACKAGE:IpToCountry:XC_Engine.IpToCountry_Fixer");
 	}
 	
 	LastVersion = 24;

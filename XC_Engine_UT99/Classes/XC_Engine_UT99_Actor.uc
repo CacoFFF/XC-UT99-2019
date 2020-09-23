@@ -54,12 +54,16 @@ event XC_Init()
 	//****
 	//Pawn
 	ReplaceFunction( class'Pawn', class'XC_Engine_ScriptedPawn', 'PickTarget', 'Pawn_PickTarget');
+
+	//***********
+	//Skin tweaks
+	ReplaceFunction( class'TournamentPlayer', class'XC_Engine_TournamentPlayer', 'SetMultiSkin', 'SetMultiSkin');
+	ReplaceFunction( class'TBoss'           , class'XC_Engine_TournamentPlayer', 'SetMultiSkin', 'SetMultiSkin_Boss');
 	
 	//****************
 	//TournamentPlayer
 	ReplaceFunction( class'TournamentPlayer', class'XC_Engine_TournamentPlayer', 'Summon', 'Summon');
-	ReplaceFunction( class'TournamentPlayer', class'XC_Engine_TournamentPlayer', 'SetMultiSkin', 'SetMultiSkin');
-		
+	
 	//***
 	//Bot
 	ReplaceFunction( class'Bot', class'XC_Engine_Bot', 'SetOrders', 'SetOrders'); //Moved from DLL
@@ -81,17 +85,9 @@ event XC_Init()
 	ReplaceFunction( class'DistanceViewTrigger', Class, 'Trigger', 'DVT_Trigger');
 	ReplaceFunction( class'Transporter', Class, 'Trigger', 'Transporter_Trigger');
 
-	//***************
-	//NavigationPoint
-	ReplaceFunction( class'TranslocStart', Class, 'SpecialHandling', 'TranslocStart_SpecialHandling');
-	ReplaceFunction( class'JumpSpot', class'XC_Engine_JumpSpot', 'SpecialCost', 'SpecialCost');
-
 	//*****************
 	//Unreal - Monsters
-	ReplaceFunction( class'ScriptedPawn', class'XC_Engine_ScriptedPawn', 'AttitudeToCreature', 'AttitudeToCreature');
-	ReplaceFunction( class'ScriptedPawn', class'XC_Engine_ScriptedPawn', 'AttitudeTo', 'AttitudeTo');
 	ReplaceFunction( class'ScriptedPawn', class'XC_Engine_ScriptedPawn', 'SetEnemy', 'SetEnemy');
-	ReplaceFunction( class'ScriptedPawn', class'XC_Engine_ScriptedPawn', 'MeleeDamageTarget', 'ScriptedPawn_MeleeDamageTarget');
 	ReplaceFunction( class'ScriptedPawn', class'XC_Engine_ScriptedPawn', 'StartRoaming', 'ScriptedPawn_StartRoaming');
 	ReplaceFunction( class'ScriptedPawn', class'XC_Engine_ScriptedPawn', 'SetHome', 'StartUp_SetHome', 'StartUp');
 	
@@ -167,24 +163,6 @@ function Transporter_Trigger( Actor Other, Pawn EventInstigator )
 	Disable( 'Trigger' );
 }
 
-
-function Actor TranslocStart_SpecialHandling(Pawn Other)
-{
-	local Bot B;
-
-	if ( Other.PlayerReplicationInfo == None )
-		return None;
-	if ( (Other.MoveTarget == None) || (!Other.MoveTarget.IsA('TranslocDest') && (Other.MoveTarget != self)) )
-		return self;
-	B = Bot(Other);
-	if ( B != None )
-	{
-		if ( (B.MyTranslocator == None) || (B.MyTranslocator.TTarget != None) )
-			return None;
-		B.TranslocateToTarget(self);
-		return self;
-	}
-}
 
 function FixLiandri()
 {

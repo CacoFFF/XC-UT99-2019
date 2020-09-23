@@ -312,7 +312,6 @@ event XC_Init()
 		}
 		ReplaceFunction( class'Mover', class'XC_Engine_Mover', 'FinishedClosing', 'FinishedClosing_Test');
 		ReplaceFunction( class'GameInfo', class'XC_Engine_GameInfo', 'PostLogin', 'PostLogin');
-		ReplaceFunction( class'PlayerPawn', class'XC_Engine_PlayerPawn', 'ServerMove', 'ServerMove'); //Smart bandwidth usage
 		ReplaceFunction( class'PlayerPawn', class'XC_Engine_PlayerPawn', 'Mutate', 'Mutate');
 	}
 	if ( Level.NetMode == NM_ListenServer )
@@ -347,10 +346,7 @@ event XC_Init()
 	ReplaceFunction( class'XC_Engine_GameInfo', class'GameInfo', 'RestartPlayer_Original', 'RestartPlayer');
 	ReplaceFunction( class'GameInfo', class'XC_Engine_GameInfo', 'RestartPlayer', 'RestartPlayer_Proxy');
 	ReplaceFunction( class'GameReplicationInfo', class'XC_GameReplicationInfo', 'Timer', 'Timer_Server');
-	ReplaceFunction( class'Mutator', class'XC_CollisionMutator', 'AddMutator', 'AddMutator');
 	ReplaceFunction( class'Weapon', class'XC_Engine_Weapon', 'CheckVisibility', 'CheckVisibility');
-	ReplaceFunction( class'Weapon', class'XC_Engine_Weapon', 'SpawnCopy', 'Weapon_SpawnCopy');
-	ReplaceFunction( class'Weapon', class'XC_Engine_Weapon', 'SetHand', 'SetHand');
 	ReplaceFunction( class'Weapon', class'XC_Engine_Weapon', 'WeaponChange', 'WeaponChange');
 	ReplaceFunction( class'LiftCenter', class'XC_Engine_LiftCenter', 'SpecialHandling', 'SpecialHandling');
 	ReplaceFunction( class'LiftExit', class'XC_Engine_LiftExit', 'SpecialHandling', 'SpecialHandling');
