@@ -1,0 +1,6 @@
+[Public]
+Object=(Name=XC_IpDrv.XC_TcpNetDriver,Class=Class,MetaClass=Engine.NetDriver)
+Preferences=(Caption="XC_Engine TCP/IP",Parent="Networking",Class=XC_IpDrv.XC_TcpNetDriver)
+
+[XC_TcpNetDriver]
+ClassCaption="XC_Engine TCP/IP"

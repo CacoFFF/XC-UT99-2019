@@ -5,6 +5,8 @@ class PathRebuilder expands BrushBuilder;
 
 var() name ReferenceTag;
 var() bool bBuildAir;
+var() bool bBuildSelected;
+var() float MaxDistance;
 
 
 event bool Build()
@@ -12,6 +14,7 @@ event bool Build()
 	local LevelInfo LI;
 	local class<Actor> AC;
 	local Pawn P, ScoutReference;
+	local int BuildFlags;
 	
 	ForEach class'XC_CoreStatics'.static.AllObjects( class'LevelInfo', LI)
 		if ( !LI.bDeleteMe )
@@ -24,7 +27,12 @@ event bool Build()
 			break;
 		}
 	
-	return BadParameters( class'XC_CoreStatics'.static.PathsRebuild( LI.XLevel, ScoutReference, bBuildAir));
+	if ( bBuildAir )
+		BuildFlags += 1;
+	if ( bBuildSelected )
+		BuildFlags += 2;
+	
+	return BadParameters( class'XC_CoreStatics'.static.PathsRebuild( LI.XLevel, ScoutReference, BuildFlags, MaxDistance));
 }
 
 defaultproperties
@@ -32,4 +40,5 @@ defaultproperties
 	ToolTip="Path rebuilder [XC]"
 	BitmapFilename="BBPathRebuilder"
 	ReferenceTag=PathRebuilder
+	MaxDistance=2000
 }
