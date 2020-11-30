@@ -6,6 +6,7 @@ class PathRebuilder expands BrushBuilder;
 var() name ReferenceTag;
 var() bool bBuildAir;
 var() bool bBuildSelected;
+var() bool bFastPrune;
 var() float MaxDistance;
 
 
@@ -31,6 +32,8 @@ event bool Build()
 		BuildFlags += 1;
 	if ( bBuildSelected )
 		BuildFlags += 2;
+	if ( bFastPrune )
+		BuildFlags += 4;
 	
 	return BadParameters( class'XC_CoreStatics'.static.PathsRebuild( LI.XLevel, ScoutReference, BuildFlags, MaxDistance));
 }
