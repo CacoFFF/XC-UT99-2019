@@ -23,6 +23,16 @@ var UWindowCheckbox EventChainCheck;
 var localized string EventChainText;
 var localized string EventChainHelp;
 
+// LZMA autocompressor
+var UWindowCheckbox LZMAServerCheck;
+var localized string LZMAServerText;
+var localized string LZMAServerHelp;
+
+// Save game system
+var UWindowCheckbox SaveGameCheck;
+var localized string SaveGameText;
+var localized string SaveGameHelp;
+
 
 //=====================
 //==== Map List Sorting
@@ -40,6 +50,29 @@ var localized string MapSortFolderHelp;
 var UWindowCheckbox MapSortInvertCheck;
 var localized string MapSortInvertText;
 var localized string MapSortInvertHelp;
+
+
+//====================
+//=== Dynamic settings
+
+// Other settings label
+var UMenuLabelControl DynamicSettingsTitle;
+var localized string DynamicSettingsText;
+
+// Renderer Settings button
+var UWindowSmallButton RendererSettingsButton;
+var localized string RendererSettingsText;
+var localized string RendererSettingsHelp;
+
+// AudioSub Settings button
+var UWindowSmallButton AudioSubSettingsButton;
+var localized string AudioSubSettingsText;
+var localized string AudioSubSettingsHelp;
+
+// NetDrv Settings button
+var UWindowSmallButton NetDrvSettingsButton;
+var localized string NetDrvSettingsText;
+var localized string NetDrvSettingsHelp;
 
 
 var float ControlOffset;
@@ -77,7 +110,7 @@ function Created()
 	//========
 	// Server
 	
-	// LanPlayerHost //2L
+	// LanPlayerHost //1L
 	LanPlayerHostCheck = UWindowCheckbox(CreateControl(class'UWindowCheckbox', ControlLeft, ControlOffset, ControlWidth, 1));
 	if ( GetScriptConfig() )
 		LanPlayerHostCheck.bChecked = ConfigModule.bListenServerPlayerRelevant;
@@ -85,7 +118,7 @@ function Created()
 	LanPlayerHostCheck.SetHelpText(LanPlayerHostHelp);
 	LanPlayerHostCheck.SetFont(F_Normal);
 	LanPlayerHostCheck.Align = TA_Right;
-	// Any face on Skin // 2R
+	// Any face on Skin // 1R
 	AnyFaceOnSkinCheck = UWindowCheckbox(CreateControl(class'UWindowCheckbox', ControlRight, ControlOffset, ControlWidth, 1));
 	if ( GetScriptConfig() )
 		AnyFaceOnSkinCheck.bChecked = ConfigModule.bAnyFaceOnSkin;
@@ -93,8 +126,27 @@ function Created()
 	AnyFaceOnSkinCheck.SetHelpText(AnyFaceOnSkinHelp);
 	AnyFaceOnSkinCheck.SetFont(F_Normal);
 	AnyFaceOnSkinCheck.Align = TA_Right;
-	ControlOffset += 25;
+	ControlOffset += 21;
 
+	ControlOffset += 10;
+
+	// LZMAServer //2L
+	LZMAServerCheck = UWindowCheckbox(CreateControl(class'UWindowCheckbox', ControlLeft, ControlOffset, ControlWidth, 1));
+	LZMAServerCheck.bChecked = bool(GetPlayerOwner().ConsoleCommand("get XC_GameEngine bAutoCompressLZMA"));
+	LZMAServerCheck.SetText(LZMAServerText);
+	LZMAServerCheck.SetHelpText(LZMAServerHelp);
+	LZMAServerCheck.SetFont(F_Normal);
+	LZMAServerCheck.Align = TA_Right;
+	// Any face on Skin // 2R
+	SaveGameCheck = UWindowCheckbox(CreateControl(class'UWindowCheckbox', ControlRight, ControlOffset, ControlWidth, 1));
+	SaveGameCheck.bChecked = bool(GetPlayerOwner().ConsoleCommand("get XC_GameEngine bEnhancedSaveGames"));
+	SaveGameCheck.SetText(SaveGameText);
+	SaveGameCheck.SetHelpText(SaveGameHelp);
+	SaveGameCheck.SetFont(F_Normal);
+	SaveGameCheck.Align = TA_Right;
+	ControlOffset += 21;
+	
+	
 	//=======
 	// Debug
 	ControlOffset += 10;
@@ -140,6 +192,29 @@ function Created()
 	MapSortInvertCheck.SetHelpText(MapSortInvertHelp);
 	MapSortInvertCheck.SetFont(F_Normal);
 	MapSortInvertCheck.Align = TA_Right;
+	ControlOffset += 21;
+	
+	//==================
+	// Settings buttons
+	ControlOffset += 10;
+	DynamicSettingsTitle = UMenuLabelControl(CreateControl(class'UMenuLabelControl', CenterPos, ControlOffset, CenterWidth, 1)); 
+	DynamicSettingsTitle.SetText(DynamicSettingsText);
+	DynamicSettingsTitle.Align = TA_Center;
+	ControlOffset += 15;
+	
+	// Renderer //1Left
+	RendererSettingsButton = UWindowSmallButton(CreateControl(class'UWindowSmallButton', ControlLeft, ControlOffset, ControlWidth, 16));
+	RendererSettingsButton.SetText(RendererSettingsText);
+	RendererSettingsButton.SetHelpText(RendererSettingsHelp);
+	// AudioSub //1Right
+	AudioSubSettingsButton = UWindowSmallButton(CreateControl(class'UWindowSmallButton', ControlLeft, ControlOffset, ControlWidth, 16));
+	AudioSubSettingsButton.SetText(AudioSubSettingsText);
+	AudioSubSettingsButton.SetHelpText(AudioSubSettingsHelp);
+	ControlOffset += 21;
+	// NetDrv //2Left
+	NetDrvSettingsButton = UWindowSmallButton(CreateControl(class'UWindowSmallButton', ControlLeft, ControlOffset, ControlWidth, 16));
+	NetDrvSettingsButton.SetText(NetDrvSettingsText);
+	NetDrvSettingsButton.SetHelpText(NetDrvSettingsHelp);
 }
 
 function AfterCreate()
@@ -166,6 +241,12 @@ function BeforePaint(Canvas C, float X, float Y)
 	AnyFaceOnSkinCheck.SetSize(ControlWidth, 1);
 	AnyFaceOnSkinCheck.WinLeft = ControlRight;
 
+	LZMAServerCheck.SetSize(ControlWidth, 1);
+	LZMAServerCheck.WinLeft = ControlLeft;
+
+	SaveGameCheck.SetSize(ControlWidth, 1);
+	SaveGameCheck.WinLeft = ControlRight;
+	
 	DevLogsCheck.SetSize(ControlWidth, 1);
 	DevLogsCheck.WinLeft = ControlLeft;
 	
@@ -179,10 +260,21 @@ function BeforePaint(Canvas C, float X, float Y)
 	MapSortFolderCheck.WinLeft = ControlLeft;
 	MapSortInvertCheck.SetSize(ControlWidth, 1);
 	MapSortInvertCheck.WinLeft = ControlRight;
+	
+	DynamicSettingsTitle.SetSize(CenterWidth, 1);
+	DynamicSettingsTitle.WinLeft = CenterPos;
+	RendererSettingsButton.SetSize(ControlWidth, 16);
+	RendererSettingsButton.WinLeft = ControlLeft;
+	AudioSubSettingsButton.SetSize(ControlWidth, 16);
+	AudioSubSettingsButton.WinLeft = ControlRight;
+	NetDrvSettingsButton.SetSize(ControlWidth, 16);
+	NetDrvSettingsButton.WinLeft = ControlLeft;
 }
 
 function Notify(UWindowDialogControl C, byte E)
 {
+	local XCGEDynamicOptionsWindow DW;
+
 	Super.Notify(C, E);
 	switch(E)
 	{
@@ -194,6 +286,12 @@ function Notify(UWindowDialogControl C, byte E)
 			break;
 		case AnyFaceOnSkinCheck:
 			AnyFaceOnSkinChecked();
+			break;
+		case LZMAServerCheck:
+			LZMAServerChecked();
+			break;
+		case SaveGameCheck:
+			SaveGameChecked();
 			break;
 		case DevLogsCheck:
 			DevLogsChecked();
@@ -208,8 +306,32 @@ function Notify(UWindowDialogControl C, byte E)
 			MapSortInvertChecked();
 			break;
 		}
+		break;
+	case DE_Click:
+		switch (C)
+		{
+			case RendererSettingsButton:
+				class'XCGEDynamicOptionsClientWindow'.default.DynamicClassString = GetPlayerOwner().ConsoleCommand("get ini:Engine.Engine.GameRenderDevice Class");
+				DW = XCGEDynamicOptionsWindow(Root.CreateWindow(class'XCGEDynamicOptionsWindow', 100, 100, 100, 100));
+				DW.WindowTitle = DW.WindowTitle @ "-" @ class'XCGEDynamicOptionsClientWindow'.default.DynamicClassString;
+				break;
+			case AudioSubSettingsButton:
+				class'XCGEDynamicOptionsClientWindow'.default.DynamicClassString = GetPlayerOwner().ConsoleCommand("get ini:Engine.Engine.AudioDevice Class");
+				DW = XCGEDynamicOptionsWindow(Root.CreateWindow(class'XCGEDynamicOptionsWindow', 100, 100, 100, 100));
+				DW.WindowTitle = DW.WindowTitle @ "-" @ class'XCGEDynamicOptionsClientWindow'.default.DynamicClassString;
+				break;
+			case NetDrvSettingsButton:
+				DynamicLoadObject( "ini:Engine.Engine.NetworkDevice", class'class', true); //Bind
+				class'XCGEDynamicOptionsClientWindow'.default.DynamicClassString = GetPlayerOwner().ConsoleCommand("get ini:Engine.Engine.NetworkDevice Class");
+				DW = XCGEDynamicOptionsWindow(Root.CreateWindow(class'XCGEDynamicOptionsWindow', 100, 100, 100, 100));
+				DW.WindowTitle = DW.WindowTitle @ "-" @ class'XCGEDynamicOptionsClientWindow'.default.DynamicClassString;
+				break;
+		}
+		break;
+
 	}
 }
+
 
 function MapSortFolderChecked()
 {
@@ -242,12 +364,6 @@ function AnyFaceOnSkinChecked()
 	}
 }
 
-function DevLogsChecked()
-{
-	GetPlayerOwner().ConsoleCommand("ToggleDebugLogs");
-	DevLogsCheck.bChecked = bool(GetPlayerOwner().ConsoleCommand("get XC_GameEngine bEnableDebugLogs"));
-}
-
 function EventChainChecked()
 {
 	if ( GetScriptConfig() )
@@ -256,6 +372,26 @@ function EventChainChecked()
 		ConfigModule.SaveConfig();
 	}
 }
+
+function LZMAServerChecked()
+{
+	GetPlayerOwner().ConsoleCommand("set XC_GameEngine bAutoCompressLZMA " $ int(LZMAServerCheck.bChecked));
+	SaveEngineConfig();
+}
+
+function SaveGameChecked()
+{
+	GetPlayerOwner().ConsoleCommand("set XC_GameEngine bEnhancedSaveGames " $ int(SaveGameCheck.bChecked));
+	SaveEngineConfig();
+}
+
+function DevLogsChecked()
+{
+	GetPlayerOwner().ConsoleCommand("ToggleDebugLogs");
+	DevLogsCheck.bChecked = bool(GetPlayerOwner().ConsoleCommand("get XC_GameEngine bEnableDebugLogs"));
+}
+
+
 
 
 defaultproperties
@@ -266,6 +402,10 @@ defaultproperties
 	LanPlayerHostHelp="If checked, LAN games hosts will have their player, skin and voice automatically setup for download."
 	AnyFaceOnSkinText="Any face on skin"
 	AnyFaceOnSkinHelp="If checked, it'll be possible to select any compatible face on a given skin."
+	LZMAServerText="LZMA compressor"
+	LZMAServerHelp="If checked, XC_Engine server will generate a temporary LZMA package cache for download by XC_Engine clients"
+	SaveGameText="New Save system"
+	SaveGameHelp="Replaces the SaveGame system with an enhanced version. Commands: SaveGame, LoadGame, LoadGameServer + [save name]"
 	MapListText="Map List Sorting"
 	MapSortFolderText="By Directory"
 	MapSortFolderHelp="Sorts the map list by directories instead of globally."
@@ -273,6 +413,13 @@ defaultproperties
 	MapSortInvertHelp="Reverses the map list order."
 	EventChainText="Event Chain System"
 	EventChainHelp="Improves bot AI by making triggers and other mechanisms interact with the path network."
+	DynamicSettingsText="Other Settings"
+	RendererSettingsText="Renderer Settings"
+	RendererSettingsHelp="Allows the user to modify the render device's options."
+	AudioSubSettingsText="Audio Driver Settings"
+	AudioSubSettingsHelp="Allows the user to modify the audio subsystem's options."
+	NetDrvSettingsText="Network Driver Settings"
+	NetDrvSettingsHelp="Allows the user to modify the network driver's options."
 }
 
 

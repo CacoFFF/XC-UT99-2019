@@ -105,28 +105,18 @@ event XC_Init()
 	
 
 	MapFile = String(Outer.Name);
-	if ( MapFile ~= "DM-Deck16][" )
-		FixDeck16();
-	else if ( MapFile ~= "DOM-Bullet" )
-		FixDBullet();
-	else if ( MapFile ~= "DOM-Ghardhen" )
-		FixGhardhen();
-	else if ( MapFile ~= "DOM-Cinder" )
-		FixCinder();
-	else if ( MapFile ~= "DM-Bishop" )
-		FixBishop();
-	else if ( MapFile ~= "DM-Liandri" )
-		FixLiandri();
-	else if ( MapFile ~= "DM-Agony" )
-		FixAgony();
-	else if ( MapFile ~= "DM-ArcaneTemple" )
-		FixATemple();
-	else if ( MapFile ~= "DOM-Cidom" )
-		FixCidom();
-	else if ( MapFile ~= "DOM-Sesmar" )
-		FixSesmar();
-	else if ( MapFile ~= "DM-Barricade" )
-		FixBarricade();
+	if ( MapFile ~= "DM-Deck16][" )            FixDeck16();
+	else if ( MapFile ~= "DOM-Bullet" )        FixDBullet();
+	else if ( MapFile ~= "DOM-Ghardhen" )      FixGhardhen();
+	else if ( MapFile ~= "DOM-Cinder" )        FixCinder();
+	else if ( MapFile ~= "DM-Bishop" )         FixBishop();
+	else if ( MapFile ~= "DM-Liandri" )        FixLiandri();
+	else if ( MapFile ~= "DM-Agony" )          FixAgony();
+	else if ( MapFile ~= "DM-ArcaneTemple" )   FixATemple();
+	else if ( MapFile ~= "DOM-Cidom" )         FixCidom();
+	else if ( MapFile ~= "DOM-Sesmar" )        FixSesmar();
+	else if ( MapFile ~= "DM-Barricade" )      FixBarricade();
+	else if ( MapFile ~= "CTF-High" )          FixHigh();
 		
 	Destroy();
 }
@@ -161,6 +151,17 @@ function Transporter_Trigger( Actor Other, Pawn EventInstigator )
 		}
 
 	Disable( 'Trigger' );
+}
+
+function XC_NavigationPoint AutoPath( vector NewLocation)
+{
+	local XC_NavigationPoint NewPath;
+	
+	NewPath = Spawn(class'XC_NavigationPoint', None, 'XC_NavigationPoint', NewLocation);
+	LockToNavigationChain( NewPath, true);
+	DefinePathsFor(NewPath);
+
+	return NewPath;
 }
 
 
@@ -489,6 +490,37 @@ function FixBarricade()
 	LockToNavigationChain( LE, true);
 	DefinePathsFor( LE);
 	Spawn( class'XC_Engine_LiftCenter', self, 'XC_Engine_LiftCenter', vect(510,256,86));
+}
+
+function FixHigh()
+{
+	local ReachSpec R;
+	
+	// Make jump from blue lift less likely to be used.
+	GetReachSpec( R, 1329);
+	R.Distance += 5000;
+	SetReachSpec( R, 1329);
+	
+	// Make jump from red lift less likely to be used.
+	GetReachSpec( R, 711);
+	R.Distance += 5000;
+	SetReachSpec( R, 711);
+	
+	GetReachSpec( R, 707);
+	R.Distance += 5000;
+	SetReachSpec( R, 707);
+	
+	// Add some extra paths...
+	AutoPath( vect(2117,-2894,10874) );
+	AutoPath( vect(2114,-3697,10874) );
+	AutoPath( vect(2003,-3785,10874) );
+	AutoPath( vect(487,-60,10874) );
+	AutoPath( vect(-76,496,10874) );
+	AutoPath( vect(-47,1258,10874) );
+	AutoPath( vect(46,1341,10874) );
+	AutoPath( vect(2030,530,11706) );
+	AutoPath( vect(2328,261,11431) );
+
 }
 
 defaultproperties
