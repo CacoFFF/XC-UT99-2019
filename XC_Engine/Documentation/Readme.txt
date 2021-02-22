@@ -1,4 +1,4 @@
-XC_Engine - XC_GameEngine extension for UT99 v469a by Higor.
+XC_Engine - XC_GameEngine extension for UT99 v469b by Higor.
 
 
 ===========
@@ -60,7 +60,6 @@ Other documentation:
 ====================
 - LZMA
 - Editor
-- S3TC in Editor
 - Paths Builder
 - Object properties
 - Self Dynamic Loading

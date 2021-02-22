@@ -33,3 +33,6 @@ See "Relevancy loop.txt" for extra properties in Actor.
 - Level           -> iFirstNetRelevantActor -> iFirstNetRelevantActor   (int)                        (const, editconst)
 - NetDriver       -> ClientConnections      -> ClientConnections        (array<obj NetConnection>)   (const, editconst)
 - NetDriver       -> ServerConnection       -> ServerConnection         (obj NetConnection)          (const, editconst)
+- Property        -> PropertyFlags          -> PropertyFlags            (int)                        (const, editconst)
+- Property        -> ArrayNum               -> ArrayNum                 (int)                        (const, editconst)
+- ByteProperty    -> Enum                   -> Enum                     (obj Enum)                   (const, editconst)
